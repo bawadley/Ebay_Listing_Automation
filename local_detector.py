@@ -1,68 +1,69 @@
-"""Local object proposals using YOLOE prompt-free segmentation.
+"""Local foreground-mask crop proposals; pixels are NEVER removed from sale photos.
 
-First use downloads pretrained model weights. Inference runs locally thereafter.
-Detection is NOT proof that every eBay accessory was identified.
+Runs rembg/ISNet on a reduced preview via ONNX CPU on Apple Silicon.
+A review visualization is saved separately. No crop unless mask is plausible.
 """
 from __future__ import annotations
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
-_model_cache = {}
+_session = None
 
 
-def detect_items(image: Image.Image, settings: dict) -> tuple[list[dict], bool, str]:
+def detect_items(image: Image.Image, settings: dict, review_path=None):
+    global _session
     try:
-        import torch
-        from ultralytics import YOLOE
+        from rembg import new_session, remove
     except ImportError:
-        return [], True, "Install local dependencies: pip install -r requirements-local.txt"
-
-    model_name = str(settings.get("local_model", "yoloe-26n-seg-pf.pt"))
-    if model_name not in {"yoloe-26n-seg-pf.pt", "yoloe-26s-seg-pf.pt"}:
-        return [], True, "Unsupported local model. Use a supported prompt-free YOLOE checkpoint."
+        return [], True, "Install rembg: pip install -r requirements-local.txt"
+    model = settings.get("local_model", "isnet-general-use")
+    if model not in ("isnet-general-use", "u2netp"):
+        return [], True, "Unsupported segmentation model"
     try:
-        if model_name not in _model_cache:
-            _model_cache[model_name] = YOLOE(model_name)
-        model = _model_cache[model_name]
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        if _session is None or _session[0] != model:
+            _session = (model, new_session(model))
         preview = image.copy()
-        preview.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
-        outputs = model.predict(
-            source=preview, device=device,
-            imgsz=int(settings.get("local_imgsz", 640)),
-            conf=float(settings.get("local_confidence", 0.30)),
-            max_det=50, verbose=False)
-        detected = outputs[0].boxes
-        if detected is None or len(detected) == 0:
-            return [], True, "Local model detected no objects: original frame preserved"
-
-        boxes = []
-        pw, ph = preview.size
-        for coords, conf, cls in zip(
-            detected.xyxy.cpu().numpy(),
-            detected.conf.cpu().numpy(),
-            detected.cls.cpu().numpy()
-        ):
-            left, top, right, bottom = map(float, coords)
-            if right <= left or bottom <= top:
-                continue
-            label = str(outputs[0].names.get(int(cls), "object"))
-            boxes.append({
-                "label": label,
-                "box": [
-                    max(0, min(1000, int(round(left * 1000 / pw)))),
-                    max(0, min(1000, int(round(top * 1000 / ph)))),
-                    max(0, min(1000, int(round(right * 1000 / pw)))),
-                    max(0, min(1000, int(round(bottom * 1000 / ph))))
-                ],
-                "confidence": round(float(conf), 3)
-            })
-        boxes = [b for b in boxes if b["box"][0] < b["box"][2] and b["box"][1] < b["box"][3]]
-        if not boxes:
-            return [], True, "Local bounding boxes invalid"
-        # Model may not recognize specialized replacement parts or tiny accessories.
-        # Flag every local result for human review until validated on real listings.
-        return boxes, True, "Local YOLOE proposal only: verify all parts and accessories before listing"
+        preview.thumbnail((768, 768), Image.Resampling.LANCZOS)
+        mask_image = remove(preview, session=_session[1], only_mask=True)
+        values = np.asarray(mask_image.convert("L"), dtype=np.uint8)
+        threshold = int(settings.get("local_mask_threshold", 105))
+        foreground = values >= threshold
+        h, w = foreground.shape
+        # Reject empty, near-full, or scattered masks.
+        coverage = float(foreground.mean())
+        # A hole-free bounding rectangle must account for all detected foreground,
+        # including separate hardware and cables, rather than only the largest blob.
+        ys, xs = np.nonzero(foreground)
+        if len(xs) == 0:
+            return [], True, "No foreground detected"
+        left, top, right, bottom = int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
+        if review_path is not None:
+            overlay = preview.convert("RGBA")
+            tint = Image.new("RGBA", overlay.size, (0, 0, 0, 0))
+            tint_pixels = np.zeros((h, w, 4), dtype=np.uint8)
+            tint_pixels[..., 0] = 0
+            tint_pixels[..., 1] = 210
+            tint_pixels[..., 2] = 90
+            tint_pixels[..., 3] = foreground.astype(np.uint8) * 105
+            tint = Image.fromarray(tint_pixels, "RGBA")
+            overlay = Image.alpha_composite(overlay, tint)
+            draw = ImageDraw.Draw(overlay)
+            draw.rectangle((left, top, right, bottom), outline=(255, 130, 0, 255), width=4)
+            overlay.convert("RGB").save(review_path, "JPEG", quality=85)
+        if not (0.006 <= coverage <= 0.88):
+            return [], True, f"Foreground mask untrustworthy (coverage {coverage:.1%})"
+        # Reject speckles near photo boundaries before they make crop unsafe.
+        pad = max(2, round(min(w,h) * .005))
+        if foreground[:pad].mean() > .10 or foreground[-pad:].mean() > .10:
+            return [], True, "Foreground touches top/bottom edge; review required"
+        if foreground[:, :pad].mean() > .10 or foreground[:, -pad:].mean() > .10:
+            return [], True, "Foreground touches left/right edge; review required"
+        box = [round(left * 1000 / w), round(top * 1000 / h),
+               round(right * 1000 / w), round(bottom * 1000 / h)]
+        if box[0] >= box[2] or box[1] >= box[3]:
+            return [], True, "Invalid mask bounds"
+        return [{"label": "segmented foreground", "box": box}], True, (
+            f"Local segmentation mask covers {coverage:.1%}; inspect review overlay for missed accessories")
     except Exception as exc:
-        return [], True, f"Local detection error ({type(exc).__name__}): {str(exc)[:200]}"
+        return [], True, f"Local segmentation error ({type(exc).__name__}): {str(exc)[:180]}"

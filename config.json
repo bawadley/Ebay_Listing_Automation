@@ -11,7 +11,6 @@
   "crop_mode": "local_ai",
   "crop_margin": 0.07,
   "ai_model": "gpt-6.1-terra",
-  "local_model": "yoloe-26n-seg-pf.pt",
-  "local_imgsz": 640,
-  "local_confidence": 0.3
+  "local_model": "isnet-general-use",
+  "local_mask_threshold": 105
 }

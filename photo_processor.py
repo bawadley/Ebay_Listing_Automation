@@ -374,7 +374,12 @@ def process(path: Path, output: Path, settings: dict) -> dict:
         else:
             if crop_mode == "local_ai":
                 from local_detector import detect_items
-                boxes, review_required, note = detect_items(image, settings)
+                review_dir = output / "crop_reviews"
+                review_dir.mkdir(exist_ok=True)
+                review_path = review_dir / f"{path.stem}_mask_preview.jpg"
+                boxes, review_required, note = detect_items(image, settings, review_path)
+                if review_path.exists():
+                    record["crop_mask_preview"] = str(review_path.relative_to(output))
             else:
                 boxes, review_required, note = ai_detect_items(image, settings)
             record["ai_detected_items"] = [str(x.get("label", "item"))[:80] for x in boxes]
@@ -458,6 +463,8 @@ def main() -> None:
         parser.error("background_whitening must be between 0 and 1")
     if settings.get("crop_mode", "conservative") not in {"off", "conservative", "ai", "local_ai"}:
         parser.error("crop_mode must be off, conservative, ai or local_ai")
+    if not (1 <= int(settings.get("local_mask_threshold", 105)) <= 254):
+        parser.error("local_mask_threshold must be between 1 and 254")
     if not (320 <= int(settings.get("local_imgsz", 640)) <= 1280):
         parser.error("local_imgsz must be between 320 and 1280")
     if not (0.05 <= float(settings.get("local_confidence", 0.30)) <= 0.95):

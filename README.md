@@ -92,3 +92,21 @@ open output
 The system chooses Apple's Metal MPS backend when available, otherwise CPU. To experiment with less memory pressure, lower `local_imgsz` from `640` to `512`. For higher sensitivity, adjust `local_confidence` (default `0.30`), at the cost of more false positives. `local_model` can be `yoloe-26n-seg-pf.pt` or `yoloe-26s-seg-pf.pt`; start with the nano variant on 8GB.
 
 Set `crop_mode` to `off`, `conservative`, `local_ai`, or `ai` (cloud API). Keep `fallback_layout: "original"` to protect full framing. The model's bounding boxes may omit accessories, so inspect every cropped photo and the processing report before publishing. Initial use needs internet to fetch model weights from the Ultralytics model distribution; later inference is local. See https://docs.ultralytics.com/models/yoloe/ for official YOLOE model notes and usage.
+
+## Update: foreground segmentation instead of misleading YOLOE labels
+
+The YOLOE prompt-free test on 13 listing photographs returned many incorrect object names (e.g. insects and food items) and **0 safe crops**. The local default now uses `rembg` with the `isnet-general-use` foreground segmentation model. The model predicts a **mask** instead of guessing part categories. **Only its overall mask bounds are used for cropping**; no background pixels are removed, repainted, or replaced.
+
+Update and install:
+
+```bash
+git fetch origin
+git reset --hard origin/main
+source .venv/bin/activate
+python -m pip install -r requirements-local.txt
+python photo_processor.py
+```
+
+On an M2 with 8 GB RAM, this model runs via ONNX Runtime's CPU backend on reduced-size previews (up to 768 pixels) to limit memory use. The initial model weights are downloaded, then cached locally. Each local photo creates `output/crop_reviews/<source-stem>_mask_preview.jpg`: green overlay = foreground segmentation, orange rectangle = detected union bounds. These previews help you see if the model missed tiny parts or included tabletop clutter. **Review every proposed crop and overlay.** A missed accessory can still cause an unsafe crop, especially with wood backgrounds. Original photos are never changed; output full-frame fallback remains active. Optionally set `local_model: "u2netp"` to use a smaller, less accurate model, and adjust `local_mask_threshold` (1–254, default 105).
+
+Keep `crop_mode: "conservative"` if you want to disable segmentation. No OpenAI API calls are made in `local_ai` mode.
