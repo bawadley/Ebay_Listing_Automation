@@ -73,15 +73,25 @@ def subject_bounds(rgb: np.ndarray, threshold: float) -> tuple[tuple[int, int, i
 
 
 def crop_with_safe_margin(image: Image.Image, bounds: tuple[int, int, int, int] | None,
-                          fill: float) -> tuple[Image.Image, bool]:
+                          fill: float, padding_mode: str = "solid") -> tuple[Image.Image, bool]:
     """Square composition, never crop pixels from the bounding rectangle."""
     w, h = image.size
     if bounds is None:
         # Safe fallback: extend the frame instead of cutting off unknown product regions.
         side = max(w, h)
+        left_pad, top_pad = (side - w) // 2, (side - h) // 2
+        right_pad, bottom_pad = side - w - left_pad, side - h - top_pad
+        if padding_mode == "soft":
+            # Reflect and blur outside the photo only; never blur photographed pixels.
+            source = np.asarray(image)
+            extended = cv2.copyMakeBorder(source, top_pad, bottom_pad,
+                                          left_pad, right_pad, cv2.BORDER_REFLECT_101)
+            blurred = cv2.GaussianBlur(extended, (0, 0), sigmaX=max(12, side / 65))
+            blurred[top_pad:top_pad + h, left_pad:left_pad + w] = source
+            return Image.fromarray(blurred), False
         canvas = Image.new("RGB", (side, side), tuple(map(int, np.median(
             corners(np.asarray(image)), axis=0))))
-        canvas.paste(image, ((side - w) // 2, (side - h) // 2))
+        canvas.paste(image, (left_pad, top_pad))
         return canvas, False
 
     left, top, right, bottom = bounds
@@ -91,11 +101,11 @@ def crop_with_safe_margin(image: Image.Image, bounds: tuple[int, int, int, int] 
     cx, cy = (left + right) / 2, (top + bottom) / 2
     # Only crop when square region fits *inside* existing photograph.
     if side > min(w, h):
-        return crop_with_safe_margin(image, None, fill)
+        return crop_with_safe_margin(image, None, fill, padding_mode)
     x0 = int(np.clip(round(cx - side / 2), 0, w - side))
     y0 = int(np.clip(round(cy - side / 2), 0, h - side))
     if not (x0 <= left and y0 <= top and x0 + side >= right and y0 + side >= bottom):
-        return crop_with_safe_margin(image, None, fill)
+        return crop_with_safe_margin(image, None, fill, padding_mode)
     return image.crop((x0, y0, x0 + side, y0 + side)), True
 
 
@@ -203,9 +213,14 @@ def process(path: Path, output: Path, settings: dict) -> dict:
         else:
             record["notes"].append("Wood/uncertain scene: preserved full frame")
 
-        image, cropped = crop_with_safe_margin(image, bounds, settings["subject_fill"])
-        image = correct_colors(image, mode, profile)
-        image = lift_midtones(image, float(settings.get("exposure_strength", 0.35)))
+        padding_mode = "soft" if mode == "wood" else "solid"
+        image, cropped = crop_with_safe_margin(image, bounds, settings["subject_fill"], padding_mode)
+        correction_profile = {**profile, "max_gain": 1.0, "contrast": 1.0} if mode == "wood" else profile
+        image = correct_colors(image, mode, correction_profile)
+        exposure = (float(settings.get("wood_exposure_strength", 0.15)) if mode == "wood"
+                    else float(settings.get("exposure_strength", 1.0)))
+        record["exposure_applied"] = exposure
+        image = lift_midtones(image, exposure)
         whitening_strength = float(settings.get("background_whitening", 0.0))
         if mode == "whitebox" and whitening_strength > 0:
             image, affected_fraction = whiten_background(image, whitening_strength)
@@ -225,6 +240,7 @@ def process(path: Path, output: Path, settings: dict) -> dict:
         image.save(target, "JPEG", quality=settings["jpeg_quality"], subsampling=0)
         record["output"] = target.name
         record["crop"] = "subject-aware" if cropped else "full-frame square padding"
+        record["padding_mode"] = padding_mode
         record["status"] = "optimized" if cropped and not record["notes"] else "conservative"
     except Exception as exc:
         record["status"] = "needs_review"
@@ -245,6 +261,8 @@ def main() -> None:
         parser.error("output_size must be between 512 and 4096")
     if not (.5 <= float(settings["subject_fill"]) <= .93):
         parser.error("subject_fill must be between 0.5 and 0.93")
+    if not (0 <= float(settings.get("wood_exposure_strength", 0.15)) <= 1):
+        parser.error("wood_exposure_strength must be between 0 and 1")
     if not (0 <= float(settings.get("exposure_strength", 0.35)) <= 1):
         parser.error("exposure_strength must be between 0 and 1")
     if not (0 <= float(settings.get("background_whitening", 0.0)) <= 1):
