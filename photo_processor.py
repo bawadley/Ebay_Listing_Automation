@@ -99,6 +99,19 @@ def crop_with_safe_margin(image: Image.Image, bounds: tuple[int, int, int, int] 
     return image.crop((x0, y0, x0 + side, y0 + side)), True
 
 
+def lift_midtones(image: Image.Image, amount: float) -> Image.Image:
+    """Lift midtones with a gentle curve; protect pure black and white endpoints.
+
+    This cannot recover details that were clipped in the original photograph.
+    """
+    if amount <= 0:
+        return image
+    rgb = np.asarray(image, dtype=np.float32) / 255.0
+    # Raises shadows/midtones while tapering toward zero change at highlights.
+    lifted = rgb + amount * rgb * (1.0 - rgb)
+    return Image.fromarray(np.uint8(np.round(np.clip(lifted, 0, 1) * 255)), "RGB")
+
+
 def correct_colors(image: Image.Image, mode: str, profile: dict) -> Image.Image:
     rgb = np.asarray(image).astype(np.float32)
     if mode == "whitebox":
@@ -150,6 +163,7 @@ def process(path: Path, output: Path, settings: dict) -> dict:
 
         image, cropped = crop_with_safe_margin(image, bounds, settings["subject_fill"])
         image = correct_colors(image, mode, profile)
+        image = lift_midtones(image, float(settings.get("exposure_strength", 0.35)))
         size = int(settings["output_size"])
         image = image.resize((size, size), Image.Resampling.LANCZOS)
         target = output / f"{path.stem}_edited.jpg"
@@ -181,6 +195,8 @@ def main() -> None:
         parser.error("output_size must be between 512 and 4096")
     if not (.5 <= float(settings["subject_fill"]) <= .93):
         parser.error("subject_fill must be between 0.5 and 0.93")
+    if not (0 <= float(settings.get("exposure_strength", 0.35)) <= 1):
+        parser.error("exposure_strength must be between 0 and 1")
     if not (75 <= int(settings["jpeg_quality"]) <= 100):
         parser.error("jpeg_quality must be between 75 and 100")
 
