@@ -244,9 +244,11 @@ def ai_detect_items(image: Image.Image, settings: dict) -> tuple[list[dict], boo
 
 def crop_from_ai_boxes(image: Image.Image, boxes: list[dict],
                        fill: float, margin_fraction: float) -> tuple[Image.Image, bool, str]:
-    """Create square crop containing *all* returned boxes plus breathing room.
+    """Crop a square with a guaranteed 5-10%+ buffer around detected bounds.
 
-    If any bounding box falls beyond the feasible square, keep source intact.
+    Margins are measured as a fraction of the widest/tallest detected item
+    union, not as a fraction of the available empty space. When a square with
+    the required padding cannot fit, the entire original image is preserved.
     """
     w, h = image.size
     if not boxes:
@@ -255,20 +257,27 @@ def crop_from_ai_boxes(image: Image.Image, boxes: list[dict],
     y0 = min(b["box"][1] for b in boxes) * h / 1000
     x1 = max(b["box"][2] for b in boxes) * w / 1000
     y1 = max(b["box"][3] for b in boxes) * h / 1000
-    bw, bh = x1-x0, y1-y0
+    bw, bh = x1 - x0, y1 - y0
     if min(bw, bh) <= 0:
         return image, False, "Invalid union bounding box"
-    margin = max(10, round(max(bw, bh) * margin_fraction))
-    side = math.ceil(max(bw+2*margin, bh+2*margin, max(bw, bh)/fill))
+    # The larger object dimension defines the minimum clearance on ALL sides.
+    # subject_fill may ask for still more room, but never less than margin_fraction.
+    major = max(bw, bh)
+    margin = max(10, math.ceil(major * margin_fraction))
+    side = math.ceil(max(bw + 2 * margin, bh + 2 * margin, major / fill))
     if side > min(w, h):
-        return image, False, "All items cannot fit safely inside a square crop"
-    cx, cy = (x0+x1)/2, (y0+y1)/2
-    left = int(max(0, min(w-side, round(cx-side/2))))
-    top = int(max(0, min(h-side, round(cy-side/2))))
-    if left > x0-margin or top > y0-margin or left+side < x1+margin or top+side < y1+margin:
-        return image, False, "Insufficient room for safe crop margins"
-    # Converting model coordinates to real pixels cannot guarantee it saw every part.
-    return image.crop((left, top, left+side, top+side)), True, "AI box-based square crop"
+        return image, False, "Not enough photographed space for square crop plus margin"
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    left = int(max(0, min(w - side, round(cx - side / 2))))
+    top = int(max(0, min(h - side, round(cy - side / 2))))
+    # Protect margin after moving crop inside original boundaries.
+    tolerance = 1.5  # Only rounding noise is permitted.
+    if (left > x0 - margin + tolerance or top > y0 - margin + tolerance
+        or left + side < x1 + margin - tolerance
+        or top + side < y1 + margin - tolerance):
+        return image, False, "Insufficient original background for requested safe margin"
+    return image.crop((left, top, left + side, top + side)), True, (
+        f"Square crop with at least {margin_fraction:.0%} margin around detected bounds")
 
 
 def lift_midtones(image: Image.Image, amount: float) -> Image.Image:
@@ -392,7 +401,7 @@ def process(path: Path, output: Path, settings: dict) -> dict:
                 # listing photograph until the file has been explicitly approved.
                 candidate, proposed, reason = crop_from_ai_boxes(
                     image, boxes, settings["subject_fill"],
-                    float(settings.get("crop_margin", 0.07)))
+                    float(settings.get("crop_margin", 0.10)))
                 if proposed and crop_mode == "local_ai":
                     review_dir = output / "crop_reviews"
                     review_dir.mkdir(exist_ok=True)
@@ -404,7 +413,7 @@ def process(path: Path, output: Path, settings: dict) -> dict:
                     if path.name in approvals:
                         image, cropped = crop_from_ai_boxes(
                             image, boxes, settings["subject_fill"],
-                            float(settings.get("crop_margin", 0.07)))[:2]
+                            float(settings.get("crop_margin", 0.10)))[:2]
                         record["notes"].append("Local crop explicitly approved by filename")
                     else:
                         reason = "Crop candidate saved for review; original photograph preserved"
@@ -492,8 +501,8 @@ def main() -> None:
         parser.error("local_imgsz must be between 320 and 1280")
     if not (0.05 <= float(settings.get("local_confidence", 0.30)) <= 0.95):
         parser.error("local_confidence must be between 0.05 and 0.95")
-    if not (0.02 <= float(settings.get("crop_margin", 0.07)) <= 0.20):
-        parser.error("crop_margin must be between 0.02 and 0.20")
+    if not (0.02 <= float(settings.get("crop_margin", 0.10)) <= 0.20):
+        parser.error("crop_margin must be between 0.05 and 0.20")
     if settings.get("fallback_layout", "original") not in {"original", "square"}:
         parser.error("fallback_layout must be original or square")
     if not (75 <= int(settings["jpeg_quality"]) <= 100):
