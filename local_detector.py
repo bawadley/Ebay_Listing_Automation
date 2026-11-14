@@ -6,7 +6,7 @@ A review visualization is saved separately. No crop unless mask is plausible.
 from __future__ import annotations
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 
 _session = None
 
@@ -48,9 +48,9 @@ def detect_items(image: Image.Image, settings: dict, review_path=None):
             tint_pixels[..., 3] = foreground.astype(np.uint8) * 105
             tint = Image.fromarray(tint_pixels, "RGBA")
             overlay = Image.alpha_composite(overlay, tint)
-            draw = ImageDraw.Draw(overlay)
-            draw.rectangle((left, top, right, bottom), outline=(255, 130, 0, 255), width=4)
-            overlay.convert("RGB").save(review_path, "JPEG", quality=85)
+            # Crop rectangle is drawn later by the main processor, using the
+            # exact same pixel geometry as the candidate crop.
+            overlay.convert("RGB").save(review_path, "JPEG", quality=90)
         if not (0.006 <= coverage <= 0.88):
             return [], True, f"Foreground mask untrustworthy (coverage {coverage:.1%})"
         # Reject speckles near photo boundaries before they make crop unsafe.

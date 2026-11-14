@@ -242,42 +242,73 @@ def ai_detect_items(image: Image.Image, settings: dict) -> tuple[list[dict], boo
         return [], True, "AI detection failed: " + str(exc)[:240]
 
 
-def crop_from_ai_boxes(image: Image.Image, boxes: list[dict],
-                       fill: float, margin_fraction: float) -> tuple[Image.Image, bool, str]:
-    """Crop a square with a guaranteed 5-10%+ buffer around detected bounds.
-
-    Margins are measured as a fraction of the widest/tallest detected item
-    union, not as a fraction of the available empty space. When a square with
-    the required padding cannot fit, the entire original image is preserved.
-    """
+def calculate_ai_crop_bounds(image: Image.Image, boxes: list[dict],
+                             fill: float, margin_fraction: float):
+    """The single source of truth for crop geometry AND preview overlay."""
     w, h = image.size
     if not boxes:
-        return image, False, "No AI boxes"
+        return None, "No AI boxes"
     x0 = min(b["box"][0] for b in boxes) * w / 1000
     y0 = min(b["box"][1] for b in boxes) * h / 1000
     x1 = max(b["box"][2] for b in boxes) * w / 1000
     y1 = max(b["box"][3] for b in boxes) * h / 1000
     bw, bh = x1 - x0, y1 - y0
     if min(bw, bh) <= 0:
-        return image, False, "Invalid union bounding box"
-    # The larger object dimension defines the minimum clearance on ALL sides.
-    # subject_fill may ask for still more room, but never less than margin_fraction.
+        return None, "Invalid union bounding box"
     major = max(bw, bh)
     margin = max(10, math.ceil(major * margin_fraction))
     side = math.ceil(max(bw + 2 * margin, bh + 2 * margin, major / fill))
     if side > min(w, h):
-        return image, False, "Not enough photographed space for square crop plus margin"
+        return None, "Not enough photographed space for square crop plus margin"
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     left = int(max(0, min(w - side, round(cx - side / 2))))
     top = int(max(0, min(h - side, round(cy - side / 2))))
-    # Protect margin after moving crop inside original boundaries.
-    tolerance = 1.5  # Only rounding noise is permitted.
+    tolerance = 1.5
     if (left > x0 - margin + tolerance or top > y0 - margin + tolerance
         or left + side < x1 + margin - tolerance
         or top + side < y1 + margin - tolerance):
-        return image, False, "Insufficient original background for requested safe margin"
-    return image.crop((left, top, left + side, top + side)), True, (
+        return None, "Insufficient original background for requested safe margin"
+    return (left, top, left + side, top + side), (
         f"Square crop with at least {margin_fraction:.0%} margin around detected bounds")
+
+
+def crop_from_ai_boxes(image: Image.Image, boxes: list[dict],
+                       fill: float, margin_fraction: float) -> tuple[Image.Image, bool, str]:
+    bounds, reason = calculate_ai_crop_bounds(image, boxes, fill, margin_fraction)
+    if bounds is None:
+        return image, False, reason
+    return image.crop(bounds), True, reason
+
+
+def annotate_crop_preview(preview_path: Path, original: Image.Image, boxes: list[dict],
+                          bounds: tuple[int, int, int, int] | None,
+                          margin_fraction: float) -> None:
+    """Green = detected pixels; cyan = tight mask bounds; orange = ACTUAL crop."""
+    from PIL import ImageDraw
+    if not preview_path.exists():
+        return
+    preview = Image.open(preview_path).convert("RGB")
+    pw, ph = preview.size
+    w, h = original.size
+    draw = ImageDraw.Draw(preview)
+    if boxes:
+        tight = (min(b["box"][0] for b in boxes) * pw / 1000,
+                 min(b["box"][1] for b in boxes) * ph / 1000,
+                 max(b["box"][2] for b in boxes) * pw / 1000,
+                 max(b["box"][3] for b in boxes) * ph / 1000)
+        draw.rectangle(tight, outline=(10, 190, 240), width=3)
+    if bounds is not None:
+        x0, y0, x1, y1 = bounds
+        proposed = (round(x0 * pw / w), round(y0 * ph / h),
+                    round(x1 * pw / w) - 1, round(y1 * ph / h) - 1)
+        draw.rectangle(proposed, outline=(255, 135, 0), width=5)
+        draw.text((max(5, proposed[0] + 6), max(5, proposed[1] + 6)),
+                  f"ORANGE: {round(margin_fraction * 100)}% MARGIN CROP",
+                  fill=(255, 105, 0), stroke_width=2, stroke_fill="white")
+    else:
+        draw.text((10, 10), "NO SAFE SQUARE CROP - ORIGINAL PRESERVED",
+                  fill=(255, 110, 0), stroke_width=2, stroke_fill="white")
+    preview.save(preview_path, "JPEG", quality=90)
 
 
 def lift_midtones(image: Image.Image, amount: float) -> Image.Image:
@@ -392,6 +423,13 @@ def process(path: Path, output: Path, settings: dict) -> dict:
             else:
                 boxes, review_required, note = ai_detect_items(image, settings)
             record["ai_detected_items"] = [str(x.get("label", "item"))[:80] for x in boxes]
+            if crop_mode == "local_ai" and review_path.exists():
+                proposed_bounds, _ = calculate_ai_crop_bounds(
+                    image, boxes, settings["subject_fill"],
+                    float(settings.get("crop_margin", 0.10)))
+                annotate_crop_preview(review_path, image, boxes, proposed_bounds,
+                                      float(settings.get("crop_margin", 0.10)))
+                record["crop_preview_has_margin_outline"] = proposed_bounds is not None
             if not boxes:
                 reason = note
             elif crop_mode == "local_ai" and mode == "wood" and not settings.get("allow_local_wood_crop", False):
