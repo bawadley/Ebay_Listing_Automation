@@ -110,3 +110,17 @@ python photo_processor.py
 On an M2 with 8 GB RAM, this model runs via ONNX Runtime's CPU backend on reduced-size previews (up to 768 pixels) to limit memory use. The initial model weights are downloaded, then cached locally. Each local photo creates `output/crop_reviews/<source-stem>_mask_preview.jpg`: green overlay = foreground segmentation, orange rectangle = detected union bounds. These previews help you see if the model missed tiny parts or included tabletop clutter. **Review every proposed crop and overlay.** A missed accessory can still cause an unsafe crop, especially with wood backgrounds. Original photos are never changed; output full-frame fallback remains active. Optionally set `local_model: "u2netp"` to use a smaller, less accurate model, and adjust `local_mask_threshold` (1–254, default 105).
 
 Keep `crop_mode: "conservative"` if you want to disable segmentation. No OpenAI API calls are made in `local_ai` mode.
+
+## Python 3.13 / rembg installation repair
+
+Local ISNet/ONNX dependencies need a modern Pillow version. Older photo-processor requirements used `Pillow<12`, which conflicts with current rembg (Pillow >=12.3). Requirements have been updated for Python 3.13 and modern rembg. In the existing virtual environment:
+
+```bash
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install --upgrade -r requirements-local.txt
+python -m pip check
+python photo_processor.py
+```
+
+If pip still selects an incompatible package, inspect the full resolver error; don't install ancient Pillow releases or remove safety version bounds to force a build. Python 3.13 on Apple Silicon is supported by modern Pillow releases.

@@ -1,2 +1,2 @@
 -r requirements.txt
-rembg[cpu]>=2.0.85,<3
+rembg[cpu]>=2.0.87,<3
