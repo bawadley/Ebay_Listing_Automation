@@ -138,3 +138,7 @@ The crop routine checks that all detected bounding boxes have sufficient margin 
 ## Crop review overlay legend (fixed)
 
 `output/crop_reviews/*_mask_preview.jpg` now draws **cyan** for the tight ISNet foreground bounding rectangle, and **orange** for the **actual square crop proposal including `crop_margin` and `subject_fill`**. The orange outline comes from the identical pixel coordinates used to create the crop candidate; changing `crop_margin` visibly moves it when enough background exists. If no safe square fits, the preview says **NO SAFE SQUARE CROP** and draws no misleading orange border. Green is the model mask (not the output cutout). The preview can show a geometric candidate even for wood images withheld from final application; review settings still gate actual cropping.
+
+## Tighter crops (3% default)
+
+`crop_margin` now accepts values from `0.0` to `0.20`; default is `0.03` (3% of the detected group\'s longest dimension, per side). Default `subject_fill` is now `0.90` so that the 3% margin can actually affect framing; with `subject_fill: 0.80`, its 80% target can dominate and make changing `crop_margin` appear ineffective. For tighter crops try `crop_margin: 0.02` and `subject_fill: 0.92`. These margins only protect *detected* items. Local AI candidates still require review/explicit approval; check for missed accessories and transparent bags.

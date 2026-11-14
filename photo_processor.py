@@ -539,8 +539,8 @@ def main() -> None:
         parser.error("local_imgsz must be between 320 and 1280")
     if not (0.05 <= float(settings.get("local_confidence", 0.30)) <= 0.95):
         parser.error("local_confidence must be between 0.05 and 0.95")
-    if not (0.02 <= float(settings.get("crop_margin", 0.10)) <= 0.20):
-        parser.error("crop_margin must be between 0.05 and 0.20")
+    if not (0.0 <= float(settings.get("crop_margin", 0.03)) <= 0.20):
+        parser.error("crop_margin must be between 0.0 and 0.20")
     if settings.get("fallback_layout", "original") not in {"original", "square"}:
         parser.error("fallback_layout must be original or square")
     if not (75 <= int(settings["jpeg_quality"]) <= 100):
