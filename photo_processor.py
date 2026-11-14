@@ -372,7 +372,11 @@ def process(path: Path, output: Path, settings: dict) -> dict:
         elif crop_mode == "conservative":
             image, cropped, reason = safe_auto_square_crop(image, mode, settings["subject_fill"])
         else:
-            boxes, review_required, note = ai_detect_items(image, settings)
+            if crop_mode == "local_ai":
+                from local_detector import detect_items
+                boxes, review_required, note = detect_items(image, settings)
+            else:
+                boxes, review_required, note = ai_detect_items(image, settings)
             record["ai_detected_items"] = [str(x.get("label", "item"))[:80] for x in boxes]
             if not boxes:
                 reason = note
@@ -383,7 +387,7 @@ def process(path: Path, output: Path, settings: dict) -> dict:
                 if note:
                     record["notes"].append(note)
         record["notes"].append(reason)
-        if crop_mode == "ai" and (review_required or not cropped):
+        if crop_mode in {"ai", "local_ai"} and (review_required or not cropped):
             record["notes"].append("AI result requires visual review")
         # Preserve every photographed pixel when the crop is uncertain.
         # The output may be rectangular; eBay accepts rectangular product photos.
@@ -423,7 +427,7 @@ def process(path: Path, output: Path, settings: dict) -> dict:
         record["output"] = target.name
         record["padding_mode"] = padding_mode
         record["output_dimensions"] = list(image.size)
-        record["status"] = ("needs_review" if crop_mode == "ai" and review_required
+        record["status"] = ("needs_review" if crop_mode in {"ai", "local_ai"} and review_required
                             else "optimized" if cropped else "conservative")
         if not cropped:
             record["notes"].append("Check composition: auto crop was not safe")
@@ -452,8 +456,12 @@ def main() -> None:
         parser.error("exposure_strength must be between 0 and 1")
     if not (0 <= float(settings.get("background_whitening", 0.0)) <= 1):
         parser.error("background_whitening must be between 0 and 1")
-    if settings.get("crop_mode", "conservative") not in {"off", "conservative", "ai"}:
-        parser.error("crop_mode must be off, conservative or ai")
+    if settings.get("crop_mode", "conservative") not in {"off", "conservative", "ai", "local_ai"}:
+        parser.error("crop_mode must be off, conservative, ai or local_ai")
+    if not (320 <= int(settings.get("local_imgsz", 640)) <= 1280):
+        parser.error("local_imgsz must be between 320 and 1280")
+    if not (0.05 <= float(settings.get("local_confidence", 0.30)) <= 0.95):
+        parser.error("local_confidence must be between 0.05 and 0.95")
     if not (0.02 <= float(settings.get("crop_margin", 0.07)) <= 0.20):
         parser.error("crop_margin must be between 0.02 and 0.20")
     if settings.get("fallback_layout", "original") not in {"original", "square"}:

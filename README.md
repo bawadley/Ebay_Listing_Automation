@@ -75,3 +75,20 @@ export OPENAI_API_KEY="your-key-here"
 Never commit a key into the repository or config file. Set `"crop_mode": "ai"` in config.json and run `python photo_processor.py`. No key, API error, invalid bounding boxes, uncertain identification, or unsafe geometry means the photo is **not cropped** and the report contains a warning. Some ambiguous group photos might include unrelated tools or miss tiny components; manually inspect every AI crop before publication. Use `"crop_mode": "conservative"` for offline, free processing.
 
 `fallback_layout: "original"` preserves the original image geometry when a crop is unsafe; the result may be rectangular. Crops with enough room become 1:1. The `crop_margin` setting and `subject_fill` control breathing room around the whole group. Automatic subject boxes are not guaranteed pixel-perfect and are **not** a substitute for review.
+
+## Local AI cropping (M2 MacBook Air, 8 GB)
+
+The default crop mode is now `local_ai`, powered by the lightweight **YOLOE-26n prompt-free** open-vocabulary instance segmentation model. It proposes boxes without any OpenAI API token usage. A model download is necessary on first run. This is a specialized local detector, not a language model, and it may miss unusual OEM parts, thin cables, fasteners, transparent bags, or obscure tools. **All local AI results are flagged for manual review.** No model result automatically deletes or regenerates any image pixels.
+
+Use your existing Python 3.13 environment on macOS:
+
+```bash
+source .venv/bin/activate
+python -m pip install -r requirements-local.txt
+python photo_processor.py
+open output
+```
+
+The system chooses Apple's Metal MPS backend when available, otherwise CPU. To experiment with less memory pressure, lower `local_imgsz` from `640` to `512`. For higher sensitivity, adjust `local_confidence` (default `0.30`), at the cost of more false positives. `local_model` can be `yoloe-26n-seg-pf.pt` or `yoloe-26s-seg-pf.pt`; start with the nano variant on 8GB.
+
+Set `crop_mode` to `off`, `conservative`, `local_ai`, or `ai` (cloud API). Keep `fallback_layout: "original"` to protect full framing. The model's bounding boxes may omit accessories, so inspect every cropped photo and the processing report before publishing. Initial use needs internet to fetch model weights from the Ultralytics model distribution; later inference is local. See https://docs.ultralytics.com/models/yoloe/ for official YOLOE model notes and usage.
