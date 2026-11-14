@@ -109,7 +109,7 @@ def lift_midtones(image: Image.Image, amount: float) -> Image.Image:
     rgb = np.asarray(image, dtype=np.float32) / 255.0
     # Raises shadows/midtones while tapering toward zero change at highlights.
     lifted = rgb + amount * rgb * (1.0 - rgb)
-    return Image.fromarray(np.uint8(np.round(np.clip(lifted, 0, 1) * 255)), "RGB")
+    return Image.fromarray(np.uint8(np.round(np.clip(lifted, 0, 1) * 255)))
 
 
 def correct_colors(image: Image.Image, mode: str, profile: dict) -> Image.Image:
@@ -123,7 +123,7 @@ def correct_colors(image: Image.Image, mode: str, profile: dict) -> Image.Image:
         gains = 1 + (raw - 1) * amount
         gains = np.clip(gains, 1 - profile["color_gain"], 1 + profile["color_gain"])
         rgb = np.clip(rgb * gains.reshape(1, 1, 3), 0, 255)
-    result = Image.fromarray(np.uint8(np.round(rgb)), "RGB")
+    result = Image.fromarray(np.uint8(np.round(rgb)))
     gray = np.asarray(result.convert("L"))
     median = float(np.median(gray))
     # Gentle brightening only for genuinely dark photos; no blanket whitening.
@@ -134,6 +134,46 @@ def correct_colors(image: Image.Image, mode: str, profile: dict) -> Image.Image:
     if profile["contrast"] != 1:
         result = ImageEnhance.Contrast(result).enhance(profile["contrast"])
     return result
+
+
+def whiten_background(image: Image.Image, strength: float) -> tuple[Image.Image, float]:
+    """Gently lift only high-confidence connected neutral white background.
+
+    Never cuts out or replaces pixels. Deliberately leaves ambiguous areas alone.
+    Returns edited image and fraction of pixels affected.
+    """
+    if strength <= 0:
+        return image, 0.0
+    rgb = np.asarray(image, dtype=np.uint8)
+    h, w = rgb.shape[:2]
+    low = np.min(rgb, axis=2)
+    high = np.max(rgb, axis=2)
+    # White-ish, nearly neutral, locally smooth regions only.
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    fgray = gray.astype(np.float32)
+    mean = cv2.GaussianBlur(fgray, (0, 0), 3)
+    variance = cv2.GaussianBlur(fgray * fgray, (0, 0), 3) - mean * mean
+    smooth = variance < 45
+    candidate = (low >= 224) & ((high.astype(np.int16) - low.astype(np.int16)) <= 18) & smooth
+    # Only components connected to the outer image border can be background.
+    labels_n, labels = cv2.connectedComponents(candidate.astype(np.uint8), 8)
+    edge = np.concatenate((labels[0, :], labels[-1, :], labels[:, 0], labels[:, -1]))
+    approved_ids = np.unique(edge[edge != 0])
+    if len(approved_ids) == 0:
+        return image, 0.0
+    approved = np.isin(labels, approved_ids) & candidate
+    # Protect the edge around darker objects from halos and accidental spill.
+    kernel = np.ones((5, 5), dtype=np.uint8)
+    safe = cv2.erode(approved.astype(np.uint8), kernel, iterations=1).astype(bool)
+    if not np.any(safe):
+        return image, 0.0
+    pixels = rgb.astype(np.float32)
+    # Nonlinear highlight-only correction: preserve shadows and midtones.
+    eligibility = np.clip((low.astype(np.float32) - 224) / 24, 0, 1)
+    alpha = (safe.astype(np.float32) * eligibility * strength)[..., None]
+    whitened = pixels + (255.0 - pixels) * alpha
+    out = Image.fromarray(np.uint8(np.round(np.clip(whitened, 0, 255))))
+    return out, float(np.mean(alpha[..., 0] > 0))
 
 
 def process(path: Path, output: Path, settings: dict) -> dict:
@@ -166,6 +206,14 @@ def process(path: Path, output: Path, settings: dict) -> dict:
         image, cropped = crop_with_safe_margin(image, bounds, settings["subject_fill"])
         image = correct_colors(image, mode, profile)
         image = lift_midtones(image, float(settings.get("exposure_strength", 0.35)))
+        whitening_strength = float(settings.get("background_whitening", 0.0))
+        if mode == "whitebox" and whitening_strength > 0:
+            image, affected_fraction = whiten_background(image, whitening_strength)
+            record["background_whitening_coverage"] = round(affected_fraction, 4)
+            if affected_fraction < 0.02:
+                record["notes"].append("Whitening skipped most of photo: background was uncertain")
+        elif whitening_strength > 0:
+            record["notes"].append("Background whitening skipped for wood/uncertain scene")
         size = int(settings["output_size"])
         image = image.resize((size, size), Image.Resampling.LANCZOS)
         target = output / f"{path.stem}_edited.jpg"
@@ -199,6 +247,8 @@ def main() -> None:
         parser.error("subject_fill must be between 0.5 and 0.93")
     if not (0 <= float(settings.get("exposure_strength", 0.35)) <= 1):
         parser.error("exposure_strength must be between 0 and 1")
+    if not (0 <= float(settings.get("background_whitening", 0.0)) <= 1):
+        parser.error("background_whitening must be between 0 and 1")
     if not (75 <= int(settings["jpeg_quality"]) <= 100):
         parser.error("jpeg_quality must be between 75 and 100")
 
