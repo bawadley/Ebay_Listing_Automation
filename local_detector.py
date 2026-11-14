@@ -29,7 +29,7 @@ def detect_items(image: Image.Image, settings: dict) -> tuple[list[dict], bool, 
         preview = image.copy()
         preview.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
         outputs = model.predict(
-            source=np.asarray(preview), device=device,
+            source=preview, device=device,
             imgsz=int(settings.get("local_imgsz", 640)),
             conf=float(settings.get("local_confidence", 0.30)),
             max_det=50, verbose=False)
