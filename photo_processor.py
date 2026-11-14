@@ -119,6 +119,47 @@ def crop_with_safe_margin(image: Image.Image, bounds: tuple[int, int, int, int] 
     return image.crop((x0, y0, x0 + side, y0 + side)), True
 
 
+def safe_auto_square_crop(image: Image.Image, mode: str, fill: float) -> tuple[Image.Image, bool, str]:
+    """Crop only clearly empty neutral margins around *all* non-background pixels.
+
+    This isn't segmentation: each excluded pixel must look like a white
+    background. Metallic glare and transparent parts make detection uncertain,
+    so the conservative fallback is to keep the complete photograph.
+    Wood/uncertain scenes are never automatically cropped.
+    """
+    w, h = image.size
+    if mode != "whitebox":
+        return image, False, "Wood/uncertain: cannot safely distinguish objects from table"
+    rgb = np.asarray(image, dtype=np.uint8)
+    short = min(w, h)
+    # Preserve dark labels, accessories, shadows and photobox walls.
+    low = rgb.min(axis=2).astype(np.int16)
+    high = rgb.max(axis=2).astype(np.int16)
+    object_pixel = (low < 205) | ((high - low) > 24)
+    ys, xs = np.nonzero(object_pixel)
+    if len(xs) == 0:
+        return image, False, "No reliably visible item"
+    left, top, right, bottom = int(xs.min()), int(ys.min()), int(xs.max() + 1), int(ys.max() + 1)
+    margin = max(12, int(short * (1.0 / fill - 1.0) * .35))
+    side = max(right - left + 2 * margin, bottom - top + 2 * margin)
+    side = min(side, short)
+    if side >= short * .97:
+        return image, False, "Item/accessories or studio walls reach frame edges"
+    center_x, center_y = (left + right) // 2, (top + bottom) // 2
+    x0 = max(0, min(w - side, center_x - side // 2))
+    y0 = max(0, min(h - side, center_y - side // 2))
+    x1, y1 = x0 + side, y0 + side
+    if left < x0 or right > x1 or top < y0 or bottom > y1:
+        return image, False, "Crop would cut off detected content"
+    # Every discarded border pixel must be confidently pale neutral.
+    # Reject when even a small amount of product/label/detail is excluded.
+    discarded = np.ones((h, w), dtype=bool)
+    discarded[y0:y1, x0:x1] = False
+    if np.any(object_pixel & discarded):
+        return image, False, "Discarded margin contains product-like pixels"
+    return image.crop((x0, y0, x1, y1)), True, "Clear white margins removed"
+
+
 def lift_midtones(image: Image.Image, amount: float) -> Image.Image:
     """Lift midtones with a gentle curve; protect pure black and white endpoints.
 
@@ -211,20 +252,23 @@ def process(path: Path, output: Path, settings: dict) -> dict:
         record["background_confidence"] = round(confidence, 2)
         profile = PROFILES[settings["profile"]]
 
-        bounds = None
-        if mode == "whitebox" and settings.get("smart_crop_enabled", False):
-            bounds, reason = subject_bounds(original, profile["border_threshold"])
-            if reason:
-                record["notes"].append(reason)
-        elif mode == "whitebox":
-            record["notes"].append("Smart cropping disabled: all original content preserved")
-        elif settings.get("allow_crop_on_wood", False):
-            record["notes"].append("Wood crop requested but disabled until subject detection is validated")
+        # Only crop clear white margins; no object segmentation or wood trimming.
+        original_size = image.size
+        cropped = False
+        if settings.get("auto_crop_enabled", True):
+            image, cropped, reason = safe_auto_square_crop(image, mode, settings["subject_fill"])
+            record["notes"].append(reason)
         else:
-            record["notes"].append("Wood/uncertain scene: preserved full frame")
-
-        padding_mode = "soft" if mode == "wood" else "solid"
-        image, cropped = crop_with_safe_margin(image, bounds, settings["subject_fill"], padding_mode)
+            record["notes"].append("Auto crop disabled")
+        # Preserve every photographed pixel when the crop is uncertain.
+        # The output may be rectangular; eBay accepts rectangular product photos.
+        padding_mode = "none"
+        if not cropped and settings.get("fallback_layout", "original") == "square":
+            image, _ = crop_with_safe_margin(image, None, settings["subject_fill"], "solid")
+            padding_mode = "solid"
+            record["notes"].append("Square padding used: source kept intact")
+        record["original_dimensions"] = list(original_size)
+        record["crop"] = "safe-square" if cropped else ("square padding" if padding_mode == "solid" else "original aspect ratio")
         correction_profile = {**profile, "max_gain": 1.0, "contrast": 1.0} if mode == "wood" else profile
         image = correct_colors(image, mode, correction_profile)
         exposure = (float(settings.get("wood_exposure_strength", 0.15)) if mode == "wood"
@@ -240,7 +284,10 @@ def process(path: Path, output: Path, settings: dict) -> dict:
         elif whitening_strength > 0:
             record["notes"].append("Background whitening skipped for wood/uncertain scene")
         size = int(settings["output_size"])
-        image = image.resize((size, size), Image.Resampling.LANCZOS)
+        w, h = image.size
+        factor = size / max(w, h)
+        image = image.resize((max(1, round(w * factor)), max(1, round(h * factor))),
+                             Image.Resampling.LANCZOS)
         target = output / f"{path.stem}_edited.jpg"
         if target.exists():
             n = 2
@@ -249,9 +296,11 @@ def process(path: Path, output: Path, settings: dict) -> dict:
             target = output / f"{path.stem}_edited_{n}.jpg"
         image.save(target, "JPEG", quality=settings["jpeg_quality"], subsampling=0)
         record["output"] = target.name
-        record["crop"] = "subject-aware" if cropped else "full-frame square padding"
         record["padding_mode"] = padding_mode
-        record["status"] = "optimized" if cropped and not record["notes"] else "conservative"
+        record["output_dimensions"] = list(image.size)
+        record["status"] = "optimized" if cropped else "conservative"
+        if not cropped:
+            record["notes"].append("Check composition: auto crop was not safe")
     except Exception as exc:
         record["status"] = "needs_review"
         record["notes"].append(f"Processing error: {exc}")
@@ -277,6 +326,8 @@ def main() -> None:
         parser.error("exposure_strength must be between 0 and 1")
     if not (0 <= float(settings.get("background_whitening", 0.0)) <= 1):
         parser.error("background_whitening must be between 0 and 1")
+    if settings.get("fallback_layout", "original") not in {"original", "square"}:
+        parser.error("fallback_layout must be original or square")
     if not (75 <= int(settings["jpeg_quality"]) <= 100):
         parser.error("jpeg_quality must be between 75 and 100")
 
