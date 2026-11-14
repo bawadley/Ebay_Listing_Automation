@@ -42,6 +42,7 @@ Edit `config.json`:
 
 - **No AI image generation, background deletion, or object rebuilding.**
 - Whitebox photos may use a detected outer silhouette **only to determine crop bounds**. The detected mask is never used to erase pixels, so glare cannot create holes in the product.
+- Auto mode detects neutral bright regions across the whole photo, so black lightbox side walls are less likely to cause a false wood classification. The classification is heuristic; verify the reported mode and override it with `background_mode` when necessary.
 - Wooden table and uncertain scenes retain the whole rectangular frame, padded to square with softened reflected edge extensions rather than solid tan bands. This is safer than cropping, although the item may look smaller. No wood background removal is attempted.
 - Color correction for whitebox photos is deliberately mild; wood scenes do not use automatic white balance based on the table.
 - Wood/uncertain scenes disable automatic global brightness/contrast boosts and use separately adjustable gentler exposure. Whitebox settings remain unchanged.

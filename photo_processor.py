@@ -35,14 +35,24 @@ def corners(rgb: np.ndarray) -> np.ndarray:
 
 
 def detect_background(rgb: np.ndarray) -> tuple[str, float]:
-    c = corners(rgb)
-    median = np.median(c, axis=0)
-    near_gray = float(np.max(median) - np.min(median)) < 24
-    bright = float(np.min(median)) > 175
-    spread = float(np.mean(np.std(c, axis=0)))
-    if near_gray and bright and spread < 37:
-        return "whitebox", min(1.0, max(0.0, (float(np.min(median)) - 155) / 55))
-    return "wood", 0.0  # Treat all uncertain scenes as preserve-background.
+    """Detect a white photo-box scene even when dark fabric occupies corners.
+
+    Use the whole image, not corner color alone. Warm wooden tabletops contain
+    substantial orange/brown pixels, unlike a neutral lightbox background.
+    Uncertain images still follow the preserve-background path.
+    """
+    preview = cv2.resize(rgb, (256, 256), interpolation=cv2.INTER_AREA).astype(np.float32)
+    darkest = np.min(preview, axis=2)
+    chroma = np.max(preview, axis=2) - darkest
+    neutral_light = (darkest > 170) & (chroma < 23)
+    warm_wood = ((preview[:, :, 0] - preview[:, :, 2] > 25)
+                 & (preview[:, :, 1] - preview[:, :, 2] > 7)
+                 & (preview[:, :, 0] > preview[:, :, 1]))
+    light_fraction = float(np.mean(neutral_light))
+    wood_fraction = float(np.mean(warm_wood))
+    if light_fraction >= 0.20 and wood_fraction < 0.13:
+        return "whitebox", round(min(1.0, light_fraction / 0.65), 2)
+    return "wood", 0.0  # Means wood OR uncertain: never apply whitening.
 
 
 def subject_bounds(rgb: np.ndarray, threshold: float) -> tuple[tuple[int, int, int, int] | None, str]:
