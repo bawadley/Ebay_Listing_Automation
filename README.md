@@ -124,3 +124,7 @@ python photo_processor.py
 ```
 
 If pip still selects an incompatible package, inspect the full resolver error; don't install ancient Pillow releases or remove safety version bounds to force a build. Python 3.13 on Apple Silicon is supported by modern Pillow releases.
+
+## Local mask crop review gate (important)
+
+Testing the mask overlays exposed missed full-sized objects (e.g. rail on IMG_0289 and several tools in IMG_0309 and IMG_0311) and transparent bag edges. A mask-based crop **cannot be assumed complete**. Local AI now emits `output/crop_reviews/<name>_crop_candidate.jpg` whenever a square crop is geometrically possible, but defaults to preserving the full original photo in the listing output. Check the candidate against the mask overlay **and original photo**. Then add the exact original filename to `approved_local_crops` in config.json (e.g. `["IMG_0249.jpeg"]`) and rerun to apply that crop. `allow_local_wood_crop` defaults to `false` until a more reliable tool/parts detector is available. Cropped wood images require both `allow_local_wood_crop: true` and an explicitly approved filename. This gate is deliberate: masks can miss clear packaging, cables and accessories. No API or remote service required.

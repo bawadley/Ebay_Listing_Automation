@@ -12,5 +12,7 @@
   "crop_margin": 0.07,
   "ai_model": "gpt-6.1-terra",
   "local_model": "isnet-general-use",
-  "local_mask_threshold": 105
+  "local_mask_threshold": 105,
+  "allow_local_wood_crop": false,
+  "approved_local_crops": []
 }

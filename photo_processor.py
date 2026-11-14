@@ -385,10 +385,31 @@ def process(path: Path, output: Path, settings: dict) -> dict:
             record["ai_detected_items"] = [str(x.get("label", "item"))[:80] for x in boxes]
             if not boxes:
                 reason = note
+            elif crop_mode == "local_ai" and mode == "wood" and not settings.get("allow_local_wood_crop", False):
+                reason = "Wood/tabletop crop withheld: foreground mask misses some tools and accessories"
             else:
-                image, cropped, reason = crop_from_ai_boxes(
+                # Candidate crop only. Save a review image without changing the
+                # listing photograph until the file has been explicitly approved.
+                candidate, proposed, reason = crop_from_ai_boxes(
                     image, boxes, settings["subject_fill"],
                     float(settings.get("crop_margin", 0.07)))
+                if proposed and crop_mode == "local_ai":
+                    review_dir = output / "crop_reviews"
+                    review_dir.mkdir(exist_ok=True)
+                    candidate_path = review_dir / f"{path.stem}_crop_candidate.jpg"
+                    candidate.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+                    candidate.save(candidate_path, "JPEG", quality=90)
+                    record["crop_candidate"] = str(candidate_path.relative_to(output))
+                    approvals = settings.get("approved_local_crops", [])
+                    if path.name in approvals:
+                        image, cropped = crop_from_ai_boxes(
+                            image, boxes, settings["subject_fill"],
+                            float(settings.get("crop_margin", 0.07)))[:2]
+                        record["notes"].append("Local crop explicitly approved by filename")
+                    else:
+                        reason = "Crop candidate saved for review; original photograph preserved"
+                elif proposed:
+                    image, cropped = candidate, True
                 if note:
                     record["notes"].append(note)
         record["notes"].append(reason)
@@ -461,6 +482,8 @@ def main() -> None:
         parser.error("exposure_strength must be between 0 and 1")
     if not (0 <= float(settings.get("background_whitening", 0.0)) <= 1):
         parser.error("background_whitening must be between 0 and 1")
+    if not isinstance(settings.get("approved_local_crops", []), list):
+        parser.error("approved_local_crops must be an array of filenames")
     if settings.get("crop_mode", "conservative") not in {"off", "conservative", "ai", "local_ai"}:
         parser.error("crop_mode must be off, conservative, ai or local_ai")
     if not (1 <= int(settings.get("local_mask_threshold", 105)) <= 254):
