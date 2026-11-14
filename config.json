@@ -1,0 +1,8 @@
+{
+  "profile": "balanced",
+  "background_mode": "auto",
+  "output_size": 1600,
+  "jpeg_quality": 94,
+  "subject_fill": 0.86,
+  "allow_crop_on_wood": false
+}
