@@ -4,11 +4,11 @@
   "output_size": 1600,
   "jpeg_quality": 94,
   "subject_fill": 0.86,
-  "allow_crop_on_wood": false,
   "exposure_strength": 1,
-  "smart_crop_enabled": false,
   "background_whitening": 0.75,
   "wood_exposure_strength": 0.15,
-  "auto_crop_enabled": true,
-  "fallback_layout": "original"
+  "fallback_layout": "original",
+  "crop_mode": "conservative",
+  "crop_margin": 0.07,
+  "ai_model": "gpt-6.1-terra"
 }

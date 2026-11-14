@@ -6,8 +6,14 @@ Only reads from input/, writes to output/, and never replaces source files.
 from __future__ import annotations
 
 import argparse
+import base64
+import io
 import json
+import math
+import os
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 import cv2
 import numpy as np
@@ -160,6 +166,98 @@ def safe_auto_square_crop(image: Image.Image, mode: str, fill: float) -> tuple[I
     return image.crop((x0, y0, x1, y1)), True, "Clear white margins removed"
 
 
+def ai_detect_items(image: Image.Image, settings: dict) -> tuple[list[dict], bool, str]:
+    """Ask a vision model for boxes (not modified image pixels).
+
+    Boxes use normalized 0..1000 x/y coordinates. A failed call never crops.
+    Requires OPENAI_API_KEY; API usage can incur charges and sends photos online.
+    """
+    key = os.environ.get("OPENAI_API_KEY")
+    if not key:
+        return [], True, "OPENAI_API_KEY missing; AI cropping skipped"
+    thumb = image.copy()
+    thumb.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+    buffer = io.BytesIO()
+    thumb.save(buffer, "JPEG", quality=86)
+    image_url = "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+    instructions = (
+        "You analyze REAL eBay listing photos to propose framing, not edit images. "
+        "Find ALL items that may be included in the listing: main object, loose "
+        "parts, fasteners, plugs, wires, bags, packaging, and accessories. "
+        "Exclude the table, studio walls and incidental room clutter. "
+        "When you cannot tell which objects are for sale, set review_required true. "
+        "Do not omit uncertain small accessories; include their boxes instead. "
+        "Return ONLY compact JSON with keys boxes, review_required, reason. "
+        "boxes is an array of {label, box:[left,top,right,bottom]}, normalized "
+        "integers 0..1000. No markdown. If items touch photo edges, boxes must "
+        "reach 0 or 1000 accordingly. Be conservative about cutoffs."
+    )
+    data = {
+        "model": settings.get("ai_model", "gpt-6.1-terra"),
+        "input": [{
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": instructions},
+                {"type": "input_image", "image_url": image_url, "detail": "high"}
+            ]
+        }],
+        "max_output_tokens": 900
+    }
+    request = Request("https://api.openai.com/v1/responses",
+        data=json.dumps(data).encode("utf-8"),
+        headers={"Authorization": "Bearer " + key,
+                 "Content-Type": "application/json"},
+        method="POST")
+    try:
+        with urlopen(request, timeout=75) as response:
+            payload = json.load(response)
+        segments = [part.get("text", "") for item in payload.get("output", [])
+                    for part in item.get("content", []) if part.get("type") == "output_text"]
+        answer = json.loads("".join(segments))
+        boxes = answer.get("boxes", [])
+        if not isinstance(boxes, list) or not boxes or len(boxes) > 50:
+            return [], True, "No usable item bounding boxes returned"
+        for item in boxes:
+            values = item.get("box") if isinstance(item, dict) else None
+            if (not isinstance(values, list) or len(values) != 4
+                or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in values)
+                or not (0 <= values[0] < values[2] <= 1000
+                        and 0 <= values[1] < values[3] <= 1000)):
+                return [], True, "AI returned invalid box coordinates"
+        return boxes, bool(answer.get("review_required", True)), str(answer.get("reason", ""))[:240]
+    except (HTTPError, URLError, TimeoutError, ValueError, KeyError) as exc:
+        return [], True, "AI detection failed: " + str(exc)[:180]
+
+
+def crop_from_ai_boxes(image: Image.Image, boxes: list[dict],
+                       fill: float, margin_fraction: float) -> tuple[Image.Image, bool, str]:
+    """Create square crop containing *all* returned boxes plus breathing room.
+
+    If any bounding box falls beyond the feasible square, keep source intact.
+    """
+    w, h = image.size
+    if not boxes:
+        return image, False, "No AI boxes"
+    x0 = min(b["box"][0] for b in boxes) * w / 1000
+    y0 = min(b["box"][1] for b in boxes) * h / 1000
+    x1 = max(b["box"][2] for b in boxes) * w / 1000
+    y1 = max(b["box"][3] for b in boxes) * h / 1000
+    bw, bh = x1-x0, y1-y0
+    if min(bw, bh) <= 0:
+        return image, False, "Invalid union bounding box"
+    margin = max(10, round(max(bw, bh) * margin_fraction))
+    side = math.ceil(max(bw+2*margin, bh+2*margin, max(bw, bh)/fill))
+    if side > min(w, h):
+        return image, False, "All items cannot fit safely inside a square crop"
+    cx, cy = (x0+x1)/2, (y0+y1)/2
+    left = int(max(0, min(w-side, round(cx-side/2))))
+    top = int(max(0, min(h-side, round(cy-side/2))))
+    if left > x0-margin or top > y0-margin or left+side < x1+margin or top+side < y1+margin:
+        return image, False, "Insufficient room for safe crop margins"
+    # Converting model coordinates to real pixels cannot guarantee it saw every part.
+    return image.crop((left, top, left+side, top+side)), True, "AI box-based square crop"
+
+
 def lift_midtones(image: Image.Image, amount: float) -> Image.Image:
     """Lift midtones with a gentle curve; protect pure black and white endpoints.
 
@@ -252,14 +350,28 @@ def process(path: Path, output: Path, settings: dict) -> dict:
         record["background_confidence"] = round(confidence, 2)
         profile = PROFILES[settings["profile"]]
 
-        # Only crop clear white margins; no object segmentation or wood trimming.
         original_size = image.size
         cropped = False
-        if settings.get("auto_crop_enabled", True):
+        crop_mode = settings.get("crop_mode", "conservative")
+        review_required = False
+        if crop_mode == "off":
+            reason = "Cropping disabled"
+        elif crop_mode == "conservative":
             image, cropped, reason = safe_auto_square_crop(image, mode, settings["subject_fill"])
-            record["notes"].append(reason)
         else:
-            record["notes"].append("Auto crop disabled")
+            boxes, review_required, note = ai_detect_items(image, settings)
+            record["ai_detected_items"] = [str(x.get("label", "item"))[:80] for x in boxes]
+            if not boxes:
+                reason = note
+            else:
+                image, cropped, reason = crop_from_ai_boxes(
+                    image, boxes, settings["subject_fill"],
+                    float(settings.get("crop_margin", 0.07)))
+                if note:
+                    record["notes"].append(note)
+        record["notes"].append(reason)
+        if crop_mode == "ai" and (review_required or not cropped):
+            record["notes"].append("AI result requires visual review")
         # Preserve every photographed pixel when the crop is uncertain.
         # The output may be rectangular; eBay accepts rectangular product photos.
         padding_mode = "none"
@@ -298,7 +410,8 @@ def process(path: Path, output: Path, settings: dict) -> dict:
         record["output"] = target.name
         record["padding_mode"] = padding_mode
         record["output_dimensions"] = list(image.size)
-        record["status"] = "optimized" if cropped else "conservative"
+        record["status"] = ("needs_review" if crop_mode == "ai" and review_required
+                            else "optimized" if cropped else "conservative")
         if not cropped:
             record["notes"].append("Check composition: auto crop was not safe")
     except Exception as exc:
@@ -326,6 +439,10 @@ def main() -> None:
         parser.error("exposure_strength must be between 0 and 1")
     if not (0 <= float(settings.get("background_whitening", 0.0)) <= 1):
         parser.error("background_whitening must be between 0 and 1")
+    if settings.get("crop_mode", "conservative") not in {"off", "conservative", "ai"}:
+        parser.error("crop_mode must be off, conservative or ai")
+    if not (0.02 <= float(settings.get("crop_margin", 0.07)) <= 0.20):
+        parser.error("crop_margin must be between 0.02 and 0.20")
     if settings.get("fallback_layout", "original") not in {"original", "square"}:
         parser.error("fallback_layout must be original or square")
     if not (75 <= int(settings["jpeg_quality"]) <= 100):

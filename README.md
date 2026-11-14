@@ -35,7 +35,7 @@ Edit `config.json`:
 - `exposure_strength`: whitebox midtone lift from 0 to 1 (default `1.0`)
 - `wood_exposure_strength`: separate wood/uncertain midtone lift from 0 to 1 (default `0.15`)
 - `background_whitening`: gentle, high-confidence whitebox-only whitening from 0 to 1 (default `0.75`); `0` disables it
-- `auto_crop_enabled`: default `true`; crops only when every excluded margin pixel appears neutral white. No segmentation or generative edits.
+- `crop_mode`: `off`, `conservative` (default: local white-margin cropping), or `ai` (vision API object bounding boxes).\n- `crop_margin`: fraction of detected object size reserved as space around items, default `0.07`.\n- `ai_model`: vision-capable OpenAI model, default `gpt-6.1-terra`.
 - `fallback_layout`: `original` (default) retains the original rectangle when a crop is unsafe and prevents blurred/solid padding; `square` uses a plain padded canvas if 1:1 is strictly required.
 - `smart_crop_enabled`: legacy setting, no longer used by the new safe cropping pipeline.
 - `allow_crop_on_wood`: currently intentionally *not implemented*; wood scenes preserve full-frame rather than risking clipping.
@@ -61,3 +61,17 @@ Test with real unedited whitebox and wood-table listings. Compare against manual
 ## Safe cropping limitations
 
 Cropping is deliberately conservative. Auto-crop operates only on confident whitebox scenes and requires that every pixel outside the suggested square area look like pale neutral background. It preserves multi-part kits and cables by treating all dark/colorful regions as potentially important. Wood and ambiguous photos keep the original aspect ratio by default, instead of generating distracting blurred bands. This is not a full AI object detector, so zooming aggressively on wood scenes still requires later AI-assisted composition and manual review. Visual inspection is required before publishing.
+
+## AI-assisted cropping (optional)
+
+AI mode uses OpenAI's Responses API with a vision-capable model to return **only rectangular object boxes**. Python combines all detected products and accessories into one 1:1 crop, leaving configurable margins. The AI never edits, erases, or re-generates product pixels. This sends a scaled copy of each photo to the API and can incur API usage costs. ChatGPT subscriptions are separate from API billing.
+
+On macOS Terminal, set an API key for this terminal session:
+
+```bash
+export OPENAI_API_KEY="your-key-here"
+```
+
+Never commit a key into the repository or config file. Set `"crop_mode": "ai"` in config.json and run `python photo_processor.py`. No key, API error, invalid bounding boxes, uncertain identification, or unsafe geometry means the photo is **not cropped** and the report contains a warning. Some ambiguous group photos might include unrelated tools or miss tiny components; manually inspect every AI crop before publication. Use `"crop_mode": "conservative"` for offline, free processing.
+
+`fallback_layout: "original"` preserves the original image geometry when a crop is unsafe; the result may be rectangular. Crops with enough room become 1:1. The `crop_margin` setting and `subject_fill` control breathing room around the whole group. Automatic subject boxes are not guaranteed pixel-perfect and are **not** a substitute for review.
