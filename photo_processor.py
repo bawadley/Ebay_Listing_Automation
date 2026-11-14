@@ -225,8 +225,21 @@ def ai_detect_items(image: Image.Image, settings: dict) -> tuple[list[dict], boo
                         and 0 <= values[1] < values[3] <= 1000)):
                 return [], True, "AI returned invalid box coordinates"
         return boxes, bool(answer.get("review_required", True)), str(answer.get("reason", ""))[:240]
-    except (HTTPError, URLError, TimeoutError, ValueError, KeyError) as exc:
-        return [], True, "AI detection failed: " + str(exc)[:180]
+    except HTTPError as exc:
+        try:
+            detail = json.loads(exc.read().decode("utf-8", errors="replace"))
+            error = detail.get("error", {})
+            reason = str(error.get("message", str(exc)))
+            kind = str(error.get("code") or error.get("type") or "unknown")
+        except (ValueError, UnicodeError):
+            reason, kind = str(exc), "unknown"
+        if exc.code == 429:
+            hint = ("API quota/billing or rate limit; check platform.openai.com "
+                    "and the error code before retrying")
+            return [], True, f"API 429 ({kind}): {reason[:220]}. {hint}"
+        return [], True, f"API HTTP {exc.code} ({kind}): {reason[:240]}"
+    except (URLError, TimeoutError, ValueError, KeyError) as exc:
+        return [], True, "AI detection failed: " + str(exc)[:240]
 
 
 def crop_from_ai_boxes(image: Image.Image, boxes: list[dict],
