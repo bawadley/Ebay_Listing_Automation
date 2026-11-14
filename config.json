@@ -5,5 +5,6 @@
   "jpeg_quality": 94,
   "subject_fill": 0.86,
   "allow_crop_on_wood": false,
-  "exposure_strength": 0.35
+  "exposure_strength": 0.35,
+  "smart_crop_enabled": false
 }

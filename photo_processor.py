@@ -152,10 +152,12 @@ def process(path: Path, output: Path, settings: dict) -> dict:
         profile = PROFILES[settings["profile"]]
 
         bounds = None
-        if mode == "whitebox":
+        if mode == "whitebox" and settings.get("smart_crop_enabled", False):
             bounds, reason = subject_bounds(original, profile["border_threshold"])
             if reason:
                 record["notes"].append(reason)
+        elif mode == "whitebox":
+            record["notes"].append("Smart cropping disabled: all original content preserved")
         elif settings.get("allow_crop_on_wood", False):
             record["notes"].append("Wood crop requested but disabled until subject detection is validated")
         else:
