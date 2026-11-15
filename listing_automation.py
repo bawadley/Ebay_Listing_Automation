@@ -286,6 +286,48 @@ def load_chatgpt_package(name):
     return raw, sources, package
 
 
+def export_ebay_seller_hub_drafts(records, directory):
+    """Write eBay's official Seller Hub Reports Create Drafts CSV (never uploads).
+    Draft template columns are intentionally limited to documented supported fields.
+    """
+    columns = ["Action", "Custom label (SKU)", "Category ID", "Title",
+               "Condition ID", "Item photo URL", "Description", "Format",
+               "Quantity", "UPC", "Start price", "Buy It Now price"]
+    path = directory / "ebay_seller_hub_drafts.csv"
+    exported, skipped = 0, []
+    with path.open("w", newline="", encoding="utf-8-sig") as file:
+        writer = csv.DictWriter(file, fieldnames=columns)
+        writer.writeheader()
+        for rec in records:
+            category = str(rec.get("ebay_category_id") or "").strip()
+            if not category.isdigit():
+                skipped.append(str(rec.get("id")) + ": missing numeric eBay category ID")
+                continue
+            facts = rec.get("seller_details", {})
+            row = {
+                "Action": "Draft",
+                "Custom label (SKU)": rec["id"],
+                "Category ID": category,
+                "Title": str(rec.get("title", ""))[:80],
+                "Description": str(rec.get("description", "")),
+                # eBay condition IDs vary by category. Seller confirms on website.
+                "Condition ID": "",
+                # Local photos cannot be used as URLs; attach in Seller Hub.
+                "Item photo URL": "",
+                "Format": "",
+                "Quantity": str(facts.get("quantity") or ""),
+                "UPC": "",
+                "Start price": "",
+                "Buy It Now price": "",
+            }
+            writer.writerow(row)
+            exported += 1
+    return {"file": str(path), "exported": exported, "skipped": skipped,
+            "photos_note": "Attach local photos on eBay after importing draft CSV.",
+            "specifics_note": "Review and transfer category item specifics in Seller Hub; "
+                              "the official basic draft template does not document aspect columns."}
+
+
 def main():
     parser = argparse.ArgumentParser(description="Prepare local AI eBay drafts; NEVER publishes")
     parser.add_argument("--limit", type=int, default=0, help="Test only the first N products")
@@ -391,11 +433,18 @@ def main():
                 "item_specifics_json": json.dumps(rec["item_specifics"], ensure_ascii=False),
                 "photo_paths": " | ".join(rec["photos"]),
                 "missing_information": " | ".join(map(str, rec["missing_information"]))})
+    ebay_draft_export = export_ebay_seller_hub_drafts(records, drafts)
     report = {"total": len(listings), "new": new, "review_ready": len(records),
-              "errors": failures, "submitted_to_ebay": 0}
+              "errors": failures, "submitted_to_ebay": 0,
+              "seller_hub_draft_csv": ebay_draft_export}
     (drafts / "listing_report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"Finished: {len(records)} local drafts, {len(failures)} errors; 0 sent to eBay.")
     print("Open:", drafts / "review.html")
+    print("Seller Hub draft CSV:", ebay_draft_export["file"],
+          "| rows:", ebay_draft_export["exported"])
+    if ebay_draft_export["skipped"]:
+        print("  Skipped drafts with missing category IDs:",
+              "; ".join(ebay_draft_export["skipped"]), flush=True)
     return 1 if failures else 0
 
 if __name__ == "__main__":
