@@ -125,11 +125,27 @@ def status(task_id, token):
 def upload_drafts(csv_path, directory, poll_seconds=90):
     csv_path, directory = Path(csv_path), Path(directory)
     count = validate_csv(csv_path)
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as file:
+        rows = list(csv.DictReader(file))
+    skus = [str(row.get("Custom label (SKU)", "")).strip() for row in rows]
+    if any(not sku for sku in skus) or len(skus) != len(set(skus)):
+        raise ValueError("Every eBay draft must have a unique non-empty SKU/ID")
     payload = csv_path.read_bytes()
     digest = hashlib.sha256(payload).hexdigest()
     statefile = directory / "ebay_feed_upload_state.json"
     state = json.loads(statefile.read_text(encoding="utf-8")) if statefile.exists() else {}
-    prior = state.get("submissions", {}).get(digest)
+    submissions = state.get("submissions", {})
+    prior = submissions.get(digest)
+    if not prior:
+        # A modified CSV hashes differently, so protect the listing IDs too.
+        # Refuse to re-create drafts if ANY prior batch included the same SKU.
+        for past in submissions.values():
+            overlap = set(skus) & set(past.get("skus", []))
+            if overlap:
+                raise RuntimeError(
+                    "Duplicate-draft protection: SKU(s) already submitted or attempted: " +
+                    ", ".join(sorted(overlap)) +
+                    ". Review eBay Seller Hub and local upload state before retrying.")
     token = seller_token()
 
     if prior and prior.get("task_id"):
@@ -146,7 +162,7 @@ def upload_drafts(csv_path, directory, poll_seconds=90):
     if prior:
         raise RuntimeError("Prior upload attempt requires manual reconciliation: " + str(statefile))
     state.setdefault("submissions", {})[digest] = {
-        "status": "STARTED", "task_id": None, "rows": count,
+        "status": "STARTED", "task_id": None, "rows": count, "skus": skus,
         "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "csv_sha256": digest
     }
