@@ -1,0 +1,79 @@
+{
+  "id": "batch001_2",
+  "photo_folder": "2",
+  "seller_details": {
+    "product": "X-axis component for Creality Ender-3 V2 3D printer",
+    "compatible_model": "Ender-3 V2",
+    "condition": "Not specified",
+    "included": "X-axis component shown in seller's photos; exact parts included not confirmed",
+    "quantity": 1
+  },
+  "ebay_category_id": "183066",
+  "research_status": "Preliminary research completed; item identification, included parts, and condition require seller confirmation before upload.",
+  "research_sources": [
+    {
+      "title": "Ender-3 V2 official printer assembly manual showing distinct X-axis profile, XE-axis kit, tensioner and belt",
+      "url": "https://3d.nice-cdn.com/upload/file/Ender_3_V2_Manual.pdf"
+    },
+    {
+      "title": "Ender-3 V2 manual identifying distinct X-axis components",
+      "url": "https://manuals.plus/m/7af9cc892aba372073078f18f6e5f114f20d34547f42b7a163c48eda3229171c"
+    },
+    {
+      "title": "eBay 3D Printer Parts category",
+      "url": "https://www.ebay.com/b/3D-Printer-Parts/183066/bn_55161610"
+    }
+  ],
+  "listing": {
+    "title": "Ender 3 V2 X Axis Gantry Component 3D Printer Replacement Part",
+    "alternative_titles": [
+      "Creality Ender-3 V2 X Axis Replacement Component 3D Printer Part",
+      "Ender-3 V2 X-Axis 3D Printer Replacement Part Gantry Component"
+    ],
+    "description": "X-axis replacement component for the Creality Ender-3 V2 3D printer.\n\n- Product: Ender-3 V2 X-axis component\n- Compatible printer: Ender-3 V2, as identified by seller\n- Condition: Not yet confirmed by seller\n- Included items: Please confirm the exact X-axis components shown in the photographs before publishing\n\nThe Ender-3 V2 X-axis consists of multiple separately identified parts, including a horizontal profile, XE-axis kit, tensioner, and drive belt. This listing does not claim that all of those parts are included. Inspect the actual seller photographs and verify contents, condition and fitment before publishing.",
+    "category_search": "3D Printer Parts",
+    "item_specifics": {
+      "Brand": "Not specified",
+      "Type": "Not specified",
+      "Model": "Ender-3 V2",
+      "Compatible Model": "Ender-3 V2",
+      "Compatible Brand": "Creality",
+      "MPN": "Not specified",
+      "Material": "Not specified",
+      "Color": "Not specified",
+      "Manufacturer Warranty": "Not specified",
+      "Item Width": "Not specified",
+      "Item Height": "Not specified",
+      "Item Length": "Not specified",
+      "Country of Origin": "Not specified"
+    },
+    "condition_suggestion": "Not specified",
+    "condition_notes": "Condition was not provided. Request seller confirmation before final draft publishing.",
+    "included_items": [
+      "X-axis component; exact components included not confirmed"
+    ],
+    "missing_information": [
+      "Specify whether this is the horizontal X-axis aluminum extrusion, the X-axis gantry assembly, XE-axis kit, X-axis tensioner or another part.",
+      "Confirm condition: new, used, or for parts/not working.",
+      "Confirm which parts are included (belt, wheels, motor, carriage, pulleys, screws, mounting hardware).",
+      "Confirm Creality original/OEM brand if claiming manufacturer brand; compatibility with Ender-3 V2 alone does not prove OEM.",
+      "Confirm color, dimensions and material from the actual item rather than generic model assumptions.",
+      "Verify any wear, damage, functionality and completeness shown in the local photos."
+    ],
+    "evidence_notes": [
+      "Seller identified the item as 'a x axis for ender 3 v2'. The exact specific assembly was not identified.",
+      "Creality Ender-3 V2 assembly guides distinguish the horizontal X-axis profile, XE-axis kit, belt and tensioner as separate components.",
+      "Do not state the complete X-axis gantry is included when only an individual part is present."
+    ],
+    "search_keywords": [
+      "Ender 3 V2 X axis",
+      "Ender-3 V2 x axis replacement",
+      "3D printer X axis part",
+      "Creality Ender-3 V2 gantry"
+    ],
+    "research_notes": [
+      "Provisional listing suitable for local preview only; seller details missing. Avoid production API upload until exact part, contents and condition are confirmed.",
+      "Category 183066 verified on eBay; fetch live taxonomy aspects using ebay_category_audit.py before export."
+    ]
+  }
+}
