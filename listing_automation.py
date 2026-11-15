@@ -334,13 +334,20 @@ def main():
                 # If ChatGPT provided official taxonomy aspects, complete all of them.
                 # Otherwise retain researched specifics, without claiming category completeness.
                 metadata = package.get("category_metadata")
+                if not (isinstance(metadata, dict) and isinstance(metadata.get("aspects"), list)
+                        and metadata["aspects"]) and os.environ.get("EBAY_ACCESS_TOKEN"):
+                    meta_details = {**details}
+                    if record["ebay_category_id"]:
+                        meta_details["ebay_category_id"] = record["ebay_category_id"]
+                    metadata = get_category_aspects(meta_details)
+                    print("  eBay category:", metadata["status"], flush=True)
                 if isinstance(metadata, dict) and isinstance(metadata.get("aspects"), list) and metadata["aspects"]:
                     record = complete_aspects(record, details, metadata)
                 else:
                     record["category_aspect_count"] = 0
                     record["missing_information"].append(
                         "Category-wide item specifics NOT confirmed against eBay Taxonomy; "
-                        "provide category_metadata or retrieve official aspects before publishing")
+                        "provide category_metadata or set EBAY_ACCESS_TOKEN before publishing")
                 print("  ChatGPT research:", len(references), "sources; no model API calls", flush=True)
             else:
                 references, research_status = research_product(details, config)
