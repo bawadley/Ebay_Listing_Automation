@@ -135,7 +135,9 @@ def status(task_id, token):
     return call(BASE + "/task/" + task_id, token)[0]
 
 
-def upload_drafts(csv_path, directory, poll_seconds=90):
+def upload_drafts(csv_path, directory, poll_seconds=90, feed_type="FX_LISTING"):
+    if feed_type not in ("FX_LISTING", "FX_DRAFT"):
+        raise ValueError("Unsupported feed type")
     csv_path, directory = Path(csv_path), Path(directory)
     count = validate_csv(csv_path)
     rows, _ = read_draft_csv(csv_path)
@@ -148,6 +150,9 @@ def upload_drafts(csv_path, directory, poll_seconds=90):
     state = json.loads(statefile.read_text(encoding="utf-8")) if statefile.exists() else {}
     submissions = state.get("submissions", {})
     prior = submissions.get(digest)
+    if prior and prior.get("feed_type", "FX_LISTING") != feed_type:
+        raise RuntimeError("Existing submission with this CSV used a different feed type. "
+                           "Use a new SKU and research package; never retry implicitly.")
     if not prior:
         # A modified CSV hashes differently, so protect the listing IDs too.
         # Refuse to re-create drafts if ANY prior batch included the same SKU.
@@ -176,14 +181,14 @@ def upload_drafts(csv_path, directory, poll_seconds=90):
     state.setdefault("submissions", {})[digest] = {
         "status": "STARTED", "task_id": None, "rows": count, "skus": skus,
         "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "csv_sha256": digest
+        "csv_sha256": digest, "feed_type": feed_type
     }
     _save_state(statefile, state)
     entry = state["submissions"][digest]
     try:
         task, location, httpstatus = call(
             BASE + "/task", token, method="POST",
-            payload=json.dumps({"feedType": "FX_LISTING", "schemaVersion": "1.0",
+            payload=json.dumps({"feedType": feed_type, "schemaVersion": "1.0",
                                 "marketplaceId": "EBAY_US"}).encode("utf-8"),
             content_type="application/json")
         task_id = str(task.get("taskId") or location.rstrip("/").split("/")[-1])
