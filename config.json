@@ -13,6 +13,6 @@
   "ai_model": "gpt-6.1-terra",
   "local_model": "isnet-general-use",
   "local_mask_threshold": 105,
-  "allow_local_wood_crop": false,
+  "allow_local_wood_crop": true,
   "approved_local_crops": []
 }

@@ -142,3 +142,7 @@ The crop routine checks that all detected bounding boxes have sufficient margin 
 ## Tighter crops (3% default)
 
 `crop_margin` now accepts values from `0.0` to `0.20`; default is `0.03` (3% of the detected group\'s longest dimension, per side). Default `subject_fill` is now `0.90` so that the 3% margin can actually affect framing; with `subject_fill: 0.80`, its 80% target can dominate and make changing `crop_margin` appear ineffective. For tighter crops try `crop_margin: 0.02` and `subject_fill: 0.92`. These margins only protect *detected* items. Local AI candidates still require review/explicit approval; check for missed accessories and transparent bags.
+
+## Wood-background local AI crops (enabled)
+
+Wood/tabletop images now run the same local AI square crop-proposal path as white-background images (`allow_local_wood_crop: true`). The processor draws crop bounds and saves `*_crop_candidate.jpg` when the detected foreground fits with the configured margin. It does **not** automatically apply those crops: inspect each candidate against the original for missing rails, tools and hardware, then add safe files to `approved_local_crops`. Images whose segmentation touches the edge or exceeds the available square keep their original composition. Current preferred settings remain `subject_fill: 0.80` and `crop_margin: 0.05`.
