@@ -14,3 +14,8 @@ output/*
 researched_listings/*.json
 !researched_listings/example.json
 product_photos/
+
+# Generated drafts, reports, caches, and local credentials
+listing_drafts/
+.env
+.env.*

@@ -137,6 +137,8 @@ def main():
     parser.add_argument("id", help="Listing ID matching researched_listings/ID.json")
     parser.add_argument("--submit", action="store_true",
                         help="Upload photos and create an UNPUBLISHED draft on your production eBay account")
+    parser.add_argument("--refresh-preview", action="store_true",
+                        help="Explicitly rebuild preview from research, replacing local corrections")
     parser.add_argument("--research-dir", type=Path, default=ROOT / "researched_listings")
     parser.add_argument("--photos-dir", type=Path, default=ROOT / "product_photos")
     parser.add_argument("--check-category", action="store_true",
@@ -148,10 +150,24 @@ def main():
                                args.photos_dir.resolve())
         output = ROOT / "listing_drafts" / "work" / item_id
         output.mkdir(parents=True, exist_ok=True)
-        record = build_record(package, fetch_category=args.check_category)
         json_path = output / (item_id + ".json")
-        json_path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n",
-                             encoding="utf-8")
+        if args.submit and args.refresh_preview:
+            raise ValueError("Refresh and review the preview separately before submitting")
+        if json_path.exists() and not args.refresh_preview:
+            record = json.loads(json_path.read_text(encoding="utf-8"))
+            # Validate edited preview data without discarding seller corrections.
+            checked = clean(record, item_id, package[3])
+            if record.get("id") != item_id or record.get("photos") != checked["photos"]:
+                raise ValueError("Preview ID/photos changed; use --refresh-preview and review again")
+            if not str(record.get("ebay_category_id") or "").isdigit():
+                raise ValueError("Preview requires a numeric ebay_category_id")
+            record.update({key: checked[key] for key in
+                           ("title", "title_characters", "description", "item_specifics")})
+            print("Using saved preview corrections:", json_path)
+        else:
+            record = build_record(package, fetch_category=args.check_category)
+            json_path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n",
+                                 encoding="utf-8")
         review_page([record], output)
         export_one(record, output)
         print("Prepared local preview:", output / "review.html", flush=True)

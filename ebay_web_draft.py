@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from pathlib import Path
 
+from ebay_media import cached_image_available
 from listing_automation import ROOT
 from work_pipeline import package_data
 from ebay_category_audit import audit_listing
@@ -38,7 +39,7 @@ def cached_photo_urls(photos, cache_path):
         digest = hashlib.sha256(image.read_bytes()).hexdigest()
         entry = cache.get(digest) or {}
         url = entry.get("url")
-        if not isinstance(url, str) or not url.startswith("https://"):
+        if not cached_image_available(url):
             return []
         urls.append(url)
     return urls

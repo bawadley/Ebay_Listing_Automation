@@ -58,7 +58,7 @@ def run_pipeline(item_id, submit):
     return proc.returncode
 
 
-def process(state, auto_submit):
+def process(state, auto_submit, retry_errors=False):
     if not INPUT.is_dir():
         print("No researched_listings folder yet.", flush=True)
         return
@@ -82,7 +82,7 @@ def process(state, auto_submit):
         if prior.get("sha256") == digest and prior.get("status") in (desired, "SUBMITTED"):
             continue
         # Don't repeatedly retry a failed package until the file is corrected.
-        if prior.get("sha256") == digest and prior.get("status") == "ERROR":
+        if not retry_errors and prior.get("sha256") == digest and prior.get("status") == "ERROR":
             continue
         print("Processing", item_id, "-> photo folder from JSON, or listing ID", flush=True)
         code = run_pipeline(item_id, submit=False)
@@ -110,6 +110,8 @@ def main():
     parser.add_argument("--once", action="store_true", help="Sync and process just once")
     parser.add_argument("--auto-submit", action="store_true",
                         help="OPT-IN: upload images and unpublished drafts to production eBay")
+    parser.add_argument("--retry-errors", action="store_true",
+                        help="Retry failed packages once; existing feed attempts remain protected")
     parser.add_argument("--no-pull", action="store_true", help="Don't run git pull (offline test)")
     args = parser.parse_args()
     if args.interval < 15:
@@ -120,12 +122,14 @@ def main():
     else:
         print("Safe mode: preview only. No images or drafts will be sent to eBay.",
               flush=True)
+    retry_errors = args.retry_errors
     while True:
         try:
             if not args.no_pull:
                 sync_git()
             state = load_state()
-            process(state, auto_submit=args.auto_submit)
+            process(state, auto_submit=args.auto_submit, retry_errors=retry_errors)
+            retry_errors = False
         except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
             print("Listener error:", exc, file=sys.stderr, flush=True)
         if args.once:
