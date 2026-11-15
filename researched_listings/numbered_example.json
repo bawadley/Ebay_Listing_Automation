@@ -1,0 +1,39 @@
+{
+  "id": "batch001_1",
+  "photo_folder": "1",
+  "seller_details": {
+    "product": "Creality Ender 3 V2 motherboard",
+    "brand": "Creality",
+    "model": "Ender-3 V2",
+    "mpn": "4.2.7",
+    "condition": "Used",
+    "included": "Motherboard only"
+  },
+  "ebay_category_id": "183066",
+  "research_status": "Example only. Replace with verified research.",
+  "research_sources": [],
+  "listing": {
+    "title": "Creality Ender 3 V2 4.2.7 3D Printer Motherboard Mainboard Used",
+    "alternative_titles": [],
+    "description": "Used Creality Ender 3 V2 motherboard version 4.2.7. Motherboard only. Confirm fitment and condition before purchase.",
+    "category_search": "3D Printer Parts",
+    "item_specifics": {
+      "Brand": "Creality",
+      "Type": "Motherboard",
+      "Model": "Ender-3 V2",
+      "MPN": "4.2.7",
+      "Compatible Model": "Not specified"
+    },
+    "condition_suggestion": "USED",
+    "condition_notes": "Condition per seller; functionality unverified",
+    "included_items": [
+      "Motherboard"
+    ],
+    "missing_information": [
+      "Verify exact compatibility and functionality"
+    ],
+    "evidence_notes": [],
+    "search_keywords": [],
+    "research_notes": []
+  }
+}

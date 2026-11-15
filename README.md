@@ -287,3 +287,25 @@ Official docs: https://developer.ebay.com/api-docs/commerce/media/static/overvie
 ### Including item specifics in Seller Hub draft feeds
 
 The Work pipeline now adds supported nonblank item specifics using Seller Hub's dynamic `C:<aspect name>` columns (e.g. `C:Brand`, `C:Type`, `C:Model`), along with photo URLs. Unknown placeholders and values marked `INVALID_CHOICE` are omitted. This follows the Seller Hub category-template column convention, but **each category-specific aspect and permitted value needs verification**; eBay may reject unsupported names or choices in the upload results. Verify actual imported fields in the first live draft rather than assuming all attributes survived. See https://pages.ebay.com/sh/reports/help/create-listings-bulk/ for Seller Hub template guidance.
+
+
+## Browser ChatGPT -> GitHub -> Mac listener -> eBay Drafts
+
+The Mac can retrieve listing JSON automatically from GitHub without ChatGPT Work or any OpenAI API charges. Each listing has a UNIQUE `id` (e.g. `batch001_1`) and a numeric `photo_folder` field (e.g. `"1"`). This allows you to re-use folders 1, 2, 3, 4 for later batches while keeping eBay listing IDs unique.
+
+Photos stay **only on your computer** in `product_photos/1/`, `product_photos/2/`, etc. ChatGPT creates a researched listing for the exact IDs and commits it to `researched_listings/batch001_1.json`, with `"photo_folder": "1"`. The local listener does a safe `git pull --ff-only` and reads the JSON; it never needs your photos or eBay OAuth tokens in GitHub.
+
+Try this sequence on the Mac:
+
+```bash
+git pull origin main
+mkdir -p product_photos/1 product_photos/2 product_photos/3 product_photos/4
+python3 local_listener.py --once
+python3 local_listener.py
+```
+
+The listener checks GitHub every 60 seconds and automatically generates local previews in `listing_drafts/work/<id>/review.html`. **Default is preview-only**, so it will NEVER upload to eBay until you explicitly opt in. Once one listing has been reviewed, upload it using `python3 work_pipeline.py batch001_1 --submit` (seller OAuth required). The `--auto-submit` listener option is available only after you've tested a draft and want a fully automatic workflow; it uploads photos and unpublished draft feed records to the production eBay account. There is no publishing operation in this code. The listener stores local status in `listing_drafts/listener_state.json` and won't repeatedly attempt an unchanged errored package; fix its JSON or photo folder, then rerun. eBay's own upload-state protections also apply.
+
+**Example Work/ChatGPT request for four listings:** 'Batch 001: Listing 1 is ..., Listing 2 is ..., Listing 3 is ..., Listing 4 is ... . Research each, find exact eBay leaf category and its item specifics, verify specs, write strong title and description. Save four packages to the GitHub repo in `researched_listings/batch001_1.json` through `batch001_4.json`. Each package's `id` is `batch001_<number>` and `photo_folder` is the matching number `1` through `4`. Copy the exact JSON shape from `researched_listings/example.json` or `researched_listings/numbered_example.json`. Photos are on my computer; don't upload photos to GitHub. Do not publish anything.' 
+
+**Caution:** eBay Feed task acceptance isn't proof the Seller Hub draft was created; check Seller Hub Reports and Drafts. Automatic photo transfer and category aspect mapping must still be verified on one real account. No OpenAI API key is needed for this route. GitHub commit permissions are required for ChatGPT to save the files.
