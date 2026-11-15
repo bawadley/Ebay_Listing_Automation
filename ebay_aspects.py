@@ -76,6 +76,17 @@ def complete_aspects(record, details, metadata):
         name = aspect["name"]
         key = name.casefold()
         value = provided.get(key) or generated.get(key) or ""
+        # Fitment is high-risk: similar-looking parts may have different pinouts,
+        # firmware, voltage, or connectors. Require seller-confirmed fitment.
+        if key in ("compatible model", "compatible brand", "compatible product",
+                   "compatible printer", "compatible equipment"):
+            verified = (provided.get(key) or
+                        provided.get("compatible_models") or
+                        provided.get("confirmed_compatibility") or "")
+            value = verified
+            if not value:
+                record["missing_information"].append(
+                    "Compatibility not seller-confirmed: verify before listing (" + name + ")")
         value = str(value).strip()
         if not value or value.casefold() in ("n/a", "not applicable", "not specified", "unknown", "none"):
             populated[name] = "Not specified"
