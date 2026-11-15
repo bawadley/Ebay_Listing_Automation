@@ -243,7 +243,10 @@ def review_page(records, directory):
         page += ['</ul><h3>Alternative titles</h3><ul>']
         for alt in rec["alternative_titles"]:
             page.append('<li>' + e(alt) + '</li>')
-        page += ['</ul></article>']
+        page += ['</ul><h3>Research sources to verify</h3><ul>']
+        for ref in rec.get("research_sources", []):
+            page.append('<li><a href="' + e(ref.get("url", "")) + '" target="_blank" rel="noopener noreferrer">' + e(ref.get("title", "") or ref.get("url", "")) + '</a></li>')
+        page += ['</ul><p><b>Research status:</b> ' + e(rec.get("research_status", "unknown")) + '</p></article>']
     page.append('</body></html>')
     (directory / "review.html").write_text("\n".join(page), encoding="utf-8")
 
