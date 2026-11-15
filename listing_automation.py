@@ -333,6 +333,8 @@ def main():
     parser.add_argument("--limit", type=int, default=0, help="Test only the first N products")
     parser.add_argument("--force", action="store_true", help="Regenerate (overwrite) existing AI drafts")
     parser.add_argument("--source", help="Override input image directory")
+    parser.add_argument("--upload-drafts", action="store_true",
+                        help="Send draft-only CSV automatically to Seller Hub via eBay Feed API")
     parser.add_argument("--chatgpt", action="store_true",
                         help="Import ChatGPT research packages from chatgpt_research/ without Ollama or online search")
     args = parser.parse_args()
@@ -445,6 +447,25 @@ def main():
     if ebay_draft_export["skipped"]:
         print("  Skipped drafts with missing category IDs:",
               "; ".join(ebay_draft_export["skipped"]), flush=True)
+    if args.upload_drafts:
+        if failures or ebay_draft_export["skipped"]:
+            print("Draft upload blocked: resolve generation errors and category skips first.",
+                  file=sys.stderr)
+            return 1
+        try:
+            from ebay_draft_uploader import upload_drafts
+            result = upload_drafts(drafts / "ebay_seller_hub_drafts.csv", drafts)
+            report["ebay_feed_upload"] = result
+            (drafts / "listing_report.json").write_text(
+                json.dumps(report, indent=2) + "\n", encoding="utf-8")
+            print("eBay Feed task:", result["task_id"], "status:", result["status"],
+                  "rows:", result["rows"], flush=True)
+            if result["status"] in ("COMPLETED_WITH_ERROR", "FAILED", "PARTIALLY_PROCESSED",
+                                    "UPLOADED_STATUS_UNKNOWN", "UNKNOWN"):
+                print("Check Seller Hub Reports upload results for details.", flush=True)
+        except Exception as exc:
+            print("  eBay draft upload ERROR:", exc, file=sys.stderr)
+            return 1
     return 1 if failures else 0
 
 if __name__ == "__main__":
