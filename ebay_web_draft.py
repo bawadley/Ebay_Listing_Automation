@@ -145,6 +145,8 @@ def export_one(item_id, check_images=False, include_specifics=True,
         print("ACTION NEEDED: seller must confirm item condition.")
     if include_specifics:
         print("Note: Seller Hub may ignore C: columns despite successful task processing.")
+        from ebay_transfer_report import generate
+        generate(item_id)
     print("Condition description is not a standard field in the 11-column Drafts template.")
     print("Draft not uploaded; use Seller Hub Reports > Uploads.")
     print("Confirm price, condition, item specifics and photo transfer in Seller Hub.")
