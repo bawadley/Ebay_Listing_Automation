@@ -9,3 +9,8 @@ output/*
 
 # Local eBay seller authorization (secret)
 .ebay_oauth.json
+
+# Local Mac Work research + original photos
+researched_listings/*.json
+!researched_listings/example.json
+product_photos/
