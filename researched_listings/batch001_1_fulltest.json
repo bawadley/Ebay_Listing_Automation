@@ -1,0 +1,100 @@
+{
+  "id": "batch001_1_fulltest",
+  "photo_folder": "1",
+  "seller_details": {
+    "product": "Creality Ender-3 V2 V4.2.2 motherboard",
+    "brand": "Creality",
+    "board_version": "V4.2.2",
+    "condition": "Used",
+    "included": "Motherboard and four mounting screws",
+    "quantity": 1,
+    "notes": "Seller-confirmed: Ender-3 V2 V4.2.2 motherboard, used. From prior seller details: four mounting screws included. No testing or working status confirmed.",
+    "model": "Ender-3 V2",
+    "compatible_model": "Ender-3 V2"
+  },
+  "ebay_category_id": "183066",
+  "research_status": "Fresh test package based on prior Creality V4.2.2 research plus seller-confirmed Ender-3 V2 identity and used condition; exact hardware details remain unverified.",
+  "research_sources": [
+    {
+      "title": "Creality official firmware and troubleshooting resources (Ender-3 32-bit V4.2.2/4.2.7)",
+      "url": "https://www.creality3dofficial.com/de/pages/firmware-files-download-troubleshooting"
+    },
+    {
+      "title": "Creality official 4.2.2 hardware variant: Ender-3 32-bit mainboard kit",
+      "url": "https://mvip.creality.com/en/goods/goodsDetail/1465"
+    },
+    {
+      "title": "Creality BL Touch application notice: 32-bit V4.2.2 board firmware variants",
+      "url": "https://www.creality.com/blog/creality-bl-touch-application-notice"
+    },
+    {
+      "title": "eBay category 183066: 3D Printer Parts",
+      "url": "https://www.ebay.com/t/3D-Printer-Parts/183066/bn_55161610"
+    }
+  ],
+  "listing": {
+    "title": "Creality Ender 3 V4.2.2 32-Bit Motherboard Mainboard Control Board Used + Screws",
+    "alternative_titles": [
+      "Creality V4.2.2 Ender 3 3D Printer Mainboard Motherboard 32-Bit Used 4 Screws",
+      "Creality Ender-3 4.2.2 Mainboard 32-Bit 3D Printer Control Board Used"
+    ],
+    "description": "Creality Ender-3 V2 V4.2.2 32-Bit Motherboard / Mainboard\n\n- For Creality Ender-3 V2 3D printer, as identified by seller\n- Board revision: V4.2.2 (not V4.2.7)\n- Condition: Used; not represented as tested or guaranteed working\n- Includes: 1 motherboard and 4 mounting screws (previously confirmed)\n- Specific processor, stepper drivers and installed firmware are not confirmed\n\nCheck the connector layout and exact board markings against your printer before purchase. Refer to the product photos for the actual item and condition.",
+    "category_search": "3D Printer Parts",
+    "item_specifics": {
+      "Brand": "Creality",
+      "Type": "Motherboard",
+      "Model": "V4.2.2",
+      "MPN": "Not specified",
+      "Compatible Model": "Ender-3 V2",
+      "Material": "Not specified",
+      "Filament Diameter": "Not applicable",
+      "Unit Quantity": "1",
+      "Unit Type": "Unit",
+      "Color": "Not specified",
+      "Country of Origin": "Not specified",
+      "Manufacturer Warranty": "Not specified",
+      "California Prop 65 Warning": "Not specified",
+      "Durability Guarantee": "Not specified",
+      "Item Height": "Not specified",
+      "Item Length": "Not specified",
+      "Item Width": "Not specified",
+      "Compatible Brand": "Creality"
+    },
+    "condition_suggestion": "USED",
+    "condition_notes": "Used. Working/test status not provided; physical wear and functionality unknown. Four mounting screws included, based on earlier seller confirmation.",
+    "included_items": [
+      "Creality V4.2.2 motherboard (1)",
+      "Mounting screws (4)"
+    ],
+    "missing_information": [
+      "Confirm the board actually has V4.2.2 printed on it and that it is a genuine Creality part.",
+      "Confirm whether it was tested working; do not claim tested unless confirmed.",
+      "Seller now identifies board as Ender-3 V2; verify board physically matches the model/firmware before publishing.",
+      "Board MCU and stepper driver chips vary; do not describe as silent or specify chip model without verifying this exact item.",
+      "Confirm manufacturer part number if one is printed on the board (V4.2.2 is a board revision, not a verified official MPN).",
+      "Review item condition, accessories, and images; confirm all four screws are pictured or supplied."
+    ],
+    "evidence_notes": [
+      "Seller stated Ender 3 motherboard revision V4.2.2, used, with four mounting screws.",
+      "Creality lists V4.2.2 firmware for Ender-3 32-bit boards and confirms 4.2.2 32-bit mainboard kits exist.",
+      "Creality lists different V4.2.2 hardware/firmware variants; exact board MCU, drivers and installed firmware not identified.",
+      "Category 183066 is eBay 3D Printer Parts.",
+      "2026-11-14: seller identified this new test listing as Ender-3 V2 V4.2.2 motherboard, used."
+    ],
+    "search_keywords": [
+      "Creality Ender 3 motherboard",
+      "Creality V4.2.2 mainboard",
+      "Ender-3 32 bit control board",
+      "3D printer motherboard replacement",
+      "Creality 4.2.2 board screws"
+    ],
+    "research_notes": [
+      "eBay category 183066 verified via public eBay page. Official category aspect metadata was previously retrieved in this project for the same category, but has not been live refreshed for this specific listing.",
+      "Do not infer compatibility with all Ender models from generic family documentation or assume silent stepper drivers.",
+      "V4.2.2 is board version; MPN left unspecified to avoid presenting revision as verified manufacturer part number.",
+      "Filament diameter doesn't characterize this electronics part. Not applicable is a review placeholder and must be omitted if the category cannot accept it.",
+      "Seller must approve all fields before publishing.",
+      "Fresh SKU and file for testing complete FX_DRAFT flow with images; reuses photos folder 1. Does not replace or resubmit batch001_1."
+    ]
+  }
+}
