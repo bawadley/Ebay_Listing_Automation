@@ -263,11 +263,36 @@ def review_page(records, directory):
     page.append('</body></html>')
     (directory / "review.html").write_text("\n".join(page), encoding="utf-8")
 
+def load_chatgpt_package(name):
+    """Import a ChatGPT-researched listing package; no model API is called."""
+    path = ROOT / "chatgpt_research" / (filename(name) + ".json")
+    if not path.is_file():
+        raise FileNotFoundError(
+            "Missing ChatGPT research package: " + str(path) +
+            ". Ask ChatGPT to commit the researched JSON for this listing ID.")
+    package = load(path, {})
+    if not isinstance(package, dict) or str(package.get("id")) != str(name):
+        raise ValueError("ChatGPT package ID does not match listing_groups.json: " + str(name))
+    raw = package.get("listing")
+    if not isinstance(raw, dict):
+        raise ValueError("ChatGPT package must contain a listing object with title and description")
+    if not isinstance(raw.get("item_specifics"), dict):
+        raise ValueError("ChatGPT package listing.item_specifics must be a JSON object")
+    sources = package.get("research_sources", [])
+    if not isinstance(sources, list):
+        raise ValueError("research_sources must be an array")
+    sources = [item for item in sources if isinstance(item, dict) and
+               str(item.get("url", "")).startswith(("https://", "http://"))]
+    return raw, sources, package
+
+
 def main():
     parser = argparse.ArgumentParser(description="Prepare local AI eBay drafts; NEVER publishes")
     parser.add_argument("--limit", type=int, default=0, help="Test only the first N products")
     parser.add_argument("--force", action="store_true", help="Regenerate (overwrite) existing AI drafts")
     parser.add_argument("--source", help="Override input image directory")
+    parser.add_argument("--chatgpt", action="store_true",
+                        help="Import ChatGPT research packages from chatgpt_research/ without Ollama or online search")
     args = parser.parse_args()
     config = {**DEFAULTS, **load(ROOT / "listing_config.json", {})}
     source = Path(args.source).resolve() if args.source else (ROOT / config["image_source"]).resolve()
@@ -284,9 +309,12 @@ def main():
     if not listings:
         parser.error("No product photos found")
     key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if config.get("provider", "ollama") == "openai" and not key and any(args.force or not (drafts / (filename(name) + ".json")).exists() for name, _, _ in listings):
+    if not args.chatgpt and config.get("provider", "ollama") == "openai" and not key and any(args.force or not (drafts / (filename(name) + ".json")).exists() for name, _, _ in listings):
         parser.error("Set OPENAI_API_KEY in PowerShell before generating")
-    print("AI provider:", config.get("provider", "ollama"), "model:", config["model"])
+    if args.chatgpt:
+        print("AI provider: ChatGPT-researched JSON import (no model API or Ollama calls)")
+    else:
+        print("AI provider:", config.get("provider", "ollama"), "model:", config["model"])
     failures = []
     new = 0
     for index, (name, photos, details) in enumerate(listings, 1):
@@ -296,17 +324,36 @@ def main():
             print("  Existing draft preserved. Use --force to regenerate.")
             continue
         try:
-            references, research_status = research_product(details, config)
-            print("  Research:", research_status, "| sources:", len(references), flush=True)
-            category = get_category_aspects(details)
-            print("  eBay category:", category["status"], flush=True)
-            record = clean(generate(photos, details, config, key, references, category), name, photos)
-            record = complete_aspects(record, details, category)
+            if args.chatgpt:
+                raw, references, package = load_chatgpt_package(name)
+                research_status = str(package.get("research_status", "ChatGPT-researched; seller review required"))
+                record = clean(raw, name, photos)
+                record["ebay_category_id"] = str(package.get("ebay_category_id") or details.get("ebay_category_id") or "") or None
+                record["category_lookup_status"] = "Category supplied by ChatGPT; verify before eBay submission"
+                record["category_selection"] = "CHATGPT_SUGGESTED_REVIEW"
+                # If ChatGPT provided official taxonomy aspects, complete all of them.
+                # Otherwise retain researched specifics, without claiming category completeness.
+                metadata = package.get("category_metadata")
+                if isinstance(metadata, dict) and isinstance(metadata.get("aspects"), list) and metadata["aspects"]:
+                    record = complete_aspects(record, details, metadata)
+                else:
+                    record["category_aspect_count"] = 0
+                    record["missing_information"].append(
+                        "Category-wide item specifics NOT confirmed against eBay Taxonomy; "
+                        "provide category_metadata or retrieve official aspects before publishing")
+                print("  ChatGPT research:", len(references), "sources; no model API calls", flush=True)
+            else:
+                references, research_status = research_product(details, config)
+                print("  Research:", research_status, "| sources:", len(references), flush=True)
+                category = get_category_aspects(details)
+                print("  eBay category:", category["status"], flush=True)
+                record = clean(generate(photos, details, config, key, references, category), name, photos)
+                record = complete_aspects(record, details, category)
+                if not references:
+                    record["missing_information"].append("Not web-verified; confirm exact model and specifications")
             record["seller_details"] = details
             record["research_sources"] = references
             record["research_status"] = research_status
-            if not references:
-                record["missing_information"].append("Not web-verified; confirm exact model and specifications")
             path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             new += 1
         except Exception as exc:

@@ -1,0 +1,24 @@
+{
+  "id": "REPLACE_WITH_LISTING_ID",
+  "ebay_category_id": "",
+  "research_status": "ChatGPT-researched; verify all claims before listing",
+  "research_sources": [],
+  "listing": {
+    "title": "REPLACE WITH ACCURATE TITLE UNDER 80 CHARACTERS",
+    "alternative_titles": [],
+    "description": "REPLACE WITH FACTUAL DESCRIPTION",
+    "category_search": "REPLACE WITH CATEGORY",
+    "item_specifics": {
+      "Brand": "Not specified"
+    },
+    "condition_suggestion": "UNKNOWN",
+    "condition_notes": "Verify condition",
+    "included_items": [],
+    "missing_information": [
+      "Verify product model and condition"
+    ],
+    "evidence_notes": [],
+    "search_keywords": [],
+    "research_notes": []
+  }
+}
