@@ -347,3 +347,13 @@ A production task using FX_DRAFT returned COMPLETED/1 success, and an editable S
 ## Diagnose specific fields that don't transfer
 
 After `python ebay_web_draft.py <ID> --official-aspects --upload-images`, the program now writes `listing_drafts/work/<ID>/ebay_transfer_report.json` comparing all Taxonomy aspects with the values actually **sent** in the CSV. `NOT_SENT` means unknown/unverified/invalid or omitted; `SENT_NOT_VERIFIED` means present in CSV but importer behavior unknown. After examining the Seller Hub draft, optionally run `python ebay_transfer_report.py <ID> --imported "Brand,Type,Model"`. This annotates the *seller-observed* imported fields and identifies `NOT_OBSERVED_IMPORTED`. No extra eBay task is created. The report never claims that untransferred optional specifics were populated. Do not invent MPN, warranty, dimensions, material or color to fill gaps. Existing published or drafted SKUs must not be submitted again merely to inspect the report; generate/review offline first.
+
+## Explicit one-off duplicate-SKU override (dangerous, opt-in)
+
+If an existing SKU was already submitted or attempted, the normal uploader blocks duplicates or only refreshes old task status. After checking **Seller Hub Drafts, Reports, and the local `ebay_feed_upload_state.json`**, an operator may deliberately attempt another draft with exactly the same SKU using:
+
+```powershell
+python ebay_api_draft.py batch001_1 --confirm-no-existing-draft --experimental-fx-draft --retry-existing-sku batch001_1
+```
+
+The `--retry-existing-sku` value **must exactly equal** the single listing ID. This override creates a new FX_DRAFT API task and may create duplicate Seller Hub drafts. All previous task records are preserved; this one is recorded under a separate unique submission key with `explicit_duplicate_override: true`. Never use this option for routine unattended processing, and do not retry after an uncertain task without reviewing the eBay processing report. It creates only an unpublished draft (Action=Draft).

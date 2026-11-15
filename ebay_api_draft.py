@@ -19,6 +19,9 @@ def main():
     parser.add_argument("id")
     parser.add_argument("--confirm-no-existing-draft", action="store_true",
                         help="Required: confirm SKU has no existing Seller Hub draft")
+    parser.add_argument("--retry-existing-sku", metavar="EXACT_SKU",
+                        help="Explicitly authorize another draft attempt using this exact SKU. "
+                             "May create a duplicate; only use after reviewing Seller Hub and prior task results.")
     parser.add_argument("--experimental-fx-draft", action="store_true",
                         help="Try undocumented FX_DRAFT feed type instead of FX_LISTING; "
                              "may be rejected by eBay; one controlled test only")
@@ -27,6 +30,8 @@ def main():
         parser.error("Invalid listing ID")
     if not args.confirm_no_existing_draft:
         parser.error("Refusing: review Seller Hub and pass --confirm-no-existing-draft")
+    if args.retry_existing_sku and args.retry_existing_sku != args.id:
+        parser.error("--retry-existing-sku must exactly match the listing ID")
     directory = ROOT / "listing_drafts" / "work" / args.id
     path = directory / "ebay_seller_hub_web_draft.csv"
     if not path.exists():
@@ -45,8 +50,12 @@ def main():
     if args.experimental_fx_draft:
         print("EXPERIMENTAL: FX_DRAFT is described in a community support report, "
               "not eBay's public Feed API reference.")
+    if args.retry_existing_sku:
+        print("WARNING: OVERRIDE ENABLED for SKU", args.id,
+              "- another unpublished Seller Hub draft may be created.")
     try:
-        result = upload_drafts(path, directory, feed_type=feed_type)
+        result = upload_drafts(path, directory, feed_type=feed_type,
+                               retry_existing_sku=bool(args.retry_existing_sku))
         print("Task ID:", result["task_id"])
         print("Status:", result["status"])
         print("Summary:", json.dumps(result.get("upload_summary", {}), indent=2))

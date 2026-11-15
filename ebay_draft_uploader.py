@@ -135,7 +135,8 @@ def status(task_id, token):
     return call(BASE + "/task/" + task_id, token)[0]
 
 
-def upload_drafts(csv_path, directory, poll_seconds=90, feed_type="FX_LISTING"):
+def upload_drafts(csv_path, directory, poll_seconds=90, feed_type="FX_LISTING",
+                  retry_existing_sku=False):
     if feed_type not in ("FX_LISTING", "FX_DRAFT"):
         raise ValueError("Unsupported feed type")
     csv_path, directory = Path(csv_path), Path(directory)
@@ -149,11 +150,16 @@ def upload_drafts(csv_path, directory, poll_seconds=90, feed_type="FX_LISTING"):
     statefile = directory / "ebay_feed_upload_state.json"
     state = json.loads(statefile.read_text(encoding="utf-8")) if statefile.exists() else {}
     submissions = state.get("submissions", {})
-    prior = submissions.get(digest)
+    if retry_existing_sku and len(skus) != 1:
+        raise ValueError("Explicit retry only supports exactly one SKU")
+    # Preserve each previous submission (including failures and uncertain tasks).
+    # Retry uses an independent state key while retaining the CSV SHA256 for audit.
+    state_key = digest if not retry_existing_sku else digest + "-retry-" + uuid.uuid4().hex
+    prior = submissions.get(digest) if not retry_existing_sku else None
     if prior and prior.get("feed_type", "FX_LISTING") != feed_type:
         raise RuntimeError("Existing submission with this CSV used a different feed type. "
                            "Use a new SKU and research package; never retry implicitly.")
-    if not prior:
+    if not prior and not retry_existing_sku:
         # A modified CSV hashes differently, so protect the listing IDs too.
         # Refuse to re-create drafts if ANY prior batch included the same SKU.
         for past in submissions.values():
@@ -178,13 +184,14 @@ def upload_drafts(csv_path, directory, poll_seconds=90, feed_type="FX_LISTING"):
     # succeeded before a process crash. Human must reconcile this state.
     if prior:
         raise RuntimeError("Prior upload attempt requires manual reconciliation: " + str(statefile))
-    state.setdefault("submissions", {})[digest] = {
+    state.setdefault("submissions", {})[state_key] = {
         "status": "STARTED", "task_id": None, "rows": count, "skus": skus,
         "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "csv_sha256": digest, "feed_type": feed_type
+        "csv_sha256": digest, "feed_type": feed_type,
+        "explicit_duplicate_override": bool(retry_existing_sku)
     }
     _save_state(statefile, state)
-    entry = state["submissions"][digest]
+    entry = state["submissions"][state_key]
     try:
         task, location, httpstatus = call(
             BASE + "/task", token, method="POST",
