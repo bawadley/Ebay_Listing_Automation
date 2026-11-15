@@ -62,7 +62,8 @@ def photo_url_diagnostics(urls):
     print("Note: local reachability does not prove that Seller Hub imports the photo.")
 
 
-def export_one(item_id, check_images=False, include_specifics=True, official_aspects=False):
+def export_one(item_id, check_images=False, include_specifics=True,
+               official_aspects=False, upload_images_now=False):
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,75}", item_id):
         raise ValueError("Invalid listing ID")
     source = ROOT / "researched_listings" / (item_id + ".json")
@@ -73,9 +74,18 @@ def export_one(item_id, check_images=False, include_specifics=True, official_asp
     title = str(listing.get("title") or "")
     if not title or len(title) > 80:
         raise ValueError("Listing title missing or over 80 characters")
-    urls = cached_photo_urls(photos, output / "ebay_media_cache.json")
+    cache_path = output / "ebay_media_cache.json"
+    if upload_images_now:
+        from ebay_draft_uploader import seller_token
+        from ebay_media import upload_images
+        print("Uploading/caching", len(photos), "local photos to eBay Media API...")
+        urls = upload_images(photos, cache_path, seller_token())
+        print("Photos uploaded/cached:", len(urls))
+    else:
+        urls = cached_photo_urls(photos, cache_path)
     if not urls:
         print("WARNING: no complete matching uploaded photo URL cache. Image column left blank.")
+        print("Run this exporter with --upload-images for a NEW listing before API submission.")
     condition = str(facts.get("condition") or "").strip().casefold()
     condition_value = {"used": "USED", "new": "NEW"}.get(condition, "")
     if not condition_value:
@@ -129,6 +139,13 @@ def export_one(item_id, check_images=False, include_specifics=True, official_asp
         writer.writerow([row.get(key, "") for key in fields])
     print("Seller Hub website draft CSV:", dest)
     print("Photo URLs included:", len(urls))
+    print("Condition field:", repr(condition_value),
+          "(blank unless seller confirmed NEW or USED)")
+    if not condition_value:
+        print("ACTION NEEDED: seller must confirm item condition.")
+    if include_specifics:
+        print("Note: Seller Hub may ignore C: columns despite successful task processing.")
+    print("Condition description is not a standard field in the 11-column Drafts template.")
     print("Draft not uploaded; use Seller Hub Reports > Uploads.")
     print("Confirm price, condition, item specifics and photo transfer in Seller Hub.")
     return dest
@@ -137,6 +154,9 @@ def export_one(item_id, check_images=False, include_specifics=True, official_asp
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Export exact official Seller Hub website CSV")
     parser.add_argument("id", help="Researched listing ID, e.g. batch001_1")
+    parser.add_argument("--upload-images", action="store_true",
+                        help="Upload original folder images to eBay Media API; "
+                             "cache URLs and insert them into generated CSV")
     parser.add_argument("--check-images", action="store_true",
                         help="Check if cached image URLs return accessible image data")
     parser.add_argument("--official-aspects", action="store_true",
@@ -147,7 +167,8 @@ if __name__ == "__main__":
     try:
         export_one(args.id, check_images=args.check_images,
                    include_specifics=not args.basic,
-                   official_aspects=args.official_aspects)
+                   official_aspects=args.official_aspects,
+                   upload_images_now=args.upload_images)
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
         print("ERROR:", exc, file=sys.stderr)
         sys.exit(1)

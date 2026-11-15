@@ -10,7 +10,7 @@ import re
 import sys
 from pathlib import Path
 
-from ebay_draft_uploader import upload_drafts
+from ebay_draft_uploader import upload_drafts, read_draft_csv
 from listing_automation import ROOT
 
 
@@ -31,6 +31,15 @@ def main():
     path = directory / "ebay_seller_hub_web_draft.csv"
     if not path.exists():
         parser.error("Generate the official CSV using ebay_web_draft.py first")
+    rows, _ = read_draft_csv(path)
+    if len(rows) != 1:
+        parser.error("This test uploader requires exactly one listing in the CSV")
+    if not (rows[0].get("Item photo URL") or "").strip():
+        parser.error("No photos in CSV. For a NEW SKU run: "
+                     "python ebay_web_draft.py " + args.id +
+                     " --official-aspects --upload-images")
+    if not (rows[0].get("Condition ID") or "").strip():
+        print("WARNING: condition not confirmed, will remain blank in Seller Hub.")
     feed_type = "FX_DRAFT" if args.experimental_fx_draft else "FX_LISTING"
     print("Feed type:", feed_type)
     if args.experimental_fx_draft:
