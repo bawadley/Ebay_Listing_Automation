@@ -140,8 +140,9 @@ def generate_ollama(photos, details, config, research, metadata):
                json.dumps(metadata.get("aspects", [])) +
                "\nPopulate every applicable aspect only if supported by seller facts or matching research; "
                "otherwise use Not specified.")
-    payload = {"model": config["model"], "stream": False, "format": "json",
-               "options": {"temperature": 0.2, "num_predict": 2200},
+    payload = {"model": config["model"], "stream": False, "think": False,
+               "format": "json",
+               "options": {"temperature": 0.2, "num_predict": 3000},
                "messages": [{"role": "system", "content": PROMPT},
                             {"role": "user", "content": message}]}
     request = Request(endpoint + "/api/chat", data=json.dumps(payload).encode("utf-8"),
@@ -157,7 +158,10 @@ def generate_ollama(photos, details, config, research, metadata):
                            "'ollama pull " + config["model"] + "'. " + str(exc)) from exc
     content = result.get("message", {}).get("content", "")
     if not content:
-        raise ValueError("Ollama returned empty output; check the model and system memory")
+        stats = "done_reason=" + str(result.get("done_reason", "unknown")) + \
+                ", eval_count=" + str(result.get("eval_count", "unknown"))
+        raise ValueError("Ollama returned empty listing JSON (" + stats + "). "
+                         "Thinking is disabled for this request; check the model and available memory.")
     try:
         return parse_local_json(content)
     except ValueError as exc:
