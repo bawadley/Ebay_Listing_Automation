@@ -9,6 +9,8 @@ import hashlib
 import json
 import re
 import sys
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 from pathlib import Path
 
 from listing_automation import ROOT
@@ -41,7 +43,25 @@ def cached_photo_urls(photos, cache_path):
     return urls
 
 
-def export_one(item_id):
+def photo_url_diagnostics(urls):
+    """Check whether an eBay-importer-accessible HTTPS image appears available."""
+    for n, url in enumerate(urls, 1):
+        try:
+            request = Request(url, headers={"User-Agent": "Mozilla/5.0",
+                                             "Range": "bytes=0-0"})
+            with urlopen(request, timeout=15) as response:
+                status = response.status
+                mime = response.headers.get("Content-Type", "unknown")
+                print("Image", n, "HTTP", status, "content-type:", mime)
+                if not mime.lower().startswith("image/"):
+                    print("WARNING: image URL did not return an image content type.")
+        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+            print("WARNING: image", n, "URL cannot be fetched:", type(exc).__name__,
+                  getattr(exc, "code", ""))
+    print("Note: local reachability does not prove that Seller Hub imports the photo.")
+
+
+def export_one(item_id, check_images=False, include_specifics=True):
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,75}", item_id):
         raise ValueError("Invalid listing ID")
     source = ROOT / "researched_listings" / (item_id + ".json")
@@ -55,6 +75,10 @@ def export_one(item_id):
     urls = cached_photo_urls(photos, output / "ebay_media_cache.json")
     if not urls:
         print("WARNING: no complete matching uploaded photo URL cache. Image column left blank.")
+    condition = str(facts.get("condition") or "").strip().casefold()
+    condition_value = {"used": "USED", "new": "NEW"}.get(condition, "")
+    if not condition_value:
+        print("WARNING: only NEW/USED supported by official draft template; condition blank.")
     row = {
         ACTION_HEADER: "Draft",
         "Custom label (SKU)": item_id,
@@ -64,17 +88,37 @@ def export_one(item_id):
         "Price": "",  # Seller fills price when completing the draft.
         "Quantity": str(facts.get("quantity") or "1"),
         "Item photo URL": "|".join(urls),
-        "Condition ID": "",  # Varies by category; complete in Seller Hub.
+        "Condition ID": condition_value,  # Official Draft importer accepts NEW / USED.
         "Description": str(listing.get("description") or ""),
         "Format": "FixedPrice",
     }
+    fields = list(HEADERS)
+    if include_specifics:
+        unknown = {"", "n/a", "not specified", "unknown", "not applicable", "none", "null"}
+        for name, value in listing.get("item_specifics", {}).items():
+            if not isinstance(name, str) or not name.strip():
+                continue
+            if not isinstance(value, (str, int, float)):
+                continue
+            value = str(value).strip()
+            if not value or value.casefold() in unknown or "\\n" in name:
+                continue
+            col = "C:" + name.strip()
+            if col not in row:
+                row[col] = value
+                fields.append(col)
+    if include_specifics:
+        print("Experimental C: item specifics columns:", len(fields) - len(HEADERS),
+              "(eBay does not guarantee extra fields in Create Drafts)")
+    if check_images and urls:
+        photo_url_diagnostics(urls)
     dest = output / "ebay_seller_hub_web_draft.csv"
     with dest.open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.writer(stream)
         for info in INFO:
-            writer.writerow(info + [""] * (len(HEADERS) - len(info)))
-        writer.writerow(HEADERS)
-        writer.writerow([row[key] for key in HEADERS])
+            writer.writerow(info + [""] * (len(fields) - len(info)))
+        writer.writerow(fields)
+        writer.writerow([row.get(key, "") for key in fields])
     print("Seller Hub website draft CSV:", dest)
     print("Photo URLs included:", len(urls))
     print("Draft not uploaded; use Seller Hub Reports > Uploads.")
@@ -85,9 +129,14 @@ def export_one(item_id):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Export exact official Seller Hub website CSV")
     parser.add_argument("id", help="Researched listing ID, e.g. batch001_1")
+    parser.add_argument("--check-images", action="store_true",
+                        help="Check if cached image URLs return accessible image data")
+    parser.add_argument("--basic", action="store_true",
+                        help="Exact 11-column template, without experimental C: fields")
     args = parser.parse_args()
     try:
-        export_one(args.id)
+        export_one(args.id, check_images=args.check_images,
+                   include_specifics=not args.basic)
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
         print("ERROR:", exc, file=sys.stderr)
         sys.exit(1)
