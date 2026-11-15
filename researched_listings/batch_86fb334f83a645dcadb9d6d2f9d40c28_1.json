@@ -1,0 +1,143 @@
+{
+  "id": "batch_86fb334f83a645dcadb9d6d2f9d40c28_1",
+  "photo_folder": "1",
+  "seller_details": {
+    "product": "Ender 3 V2 Frame",
+    "condition": "Open box",
+    "included": "Frame parts no screws",
+    "testing_status": "Tested and working",
+    "cosmetic_condition": "Excellent",
+    "cosmetic_wear": "No known issues",
+    "additional_details": "for ender 3 v2",
+    "quantity": 1
+  },
+  "questionnaire": {
+    "product": "Ender 3 V2 Frame",
+    "condition": "Open box",
+    "testing": "Tested and working",
+    "included": "Frame parts no screws",
+    "cosmetic": "Excellent",
+    "wear": "No known issues",
+    "details": "for ender 3 v2",
+    "photo_folder": "1"
+  },
+  "ebay_category_id": "183066",
+  "research_status": "Prepared in ChatGPT; approved research package. eBay draft creation not verified.",
+  "research_sources": [
+    {
+      "title": "Creality Ender-3 V2 3D Printer User Manual and Downloads",
+      "url": "https://www.creality.com/download/ender-3-v2-3d-printer-csco"
+    },
+    {
+      "title": "eBay 3D Printer Parts category",
+      "url": "https://www.ebay.com/b/3D-Printer-Parts/183066/bn_55161610"
+    },
+    {
+      "title": "eBay Printer Frame listings",
+      "url": "https://www.ebay.com/b/Printer-Frame-3D-Printer-Parts/183066/bn_85858147"
+    }
+  ],
+  "listing": {
+    "title": "Creality Ender 3 V2 3D Printer Frame Parts Open Box No Screws",
+    "alternative_titles": [
+      "Ender 3 V2 Printer Frame Parts Creality Open Box Frame Only",
+      "Creality Ender 3 V2 Frame Components 3D Printer Parts No Screws"
+    ],
+    "title_character_counts": [
+      61,
+      59,
+      63
+    ],
+    "title_selection_reason": "Clearly names the printer model, describes frame parts, and discloses open-box condition and missing screws without implying a complete frame assembly.",
+    "description": "Open-box frame parts for a Creality Ender-3 V2 3D printer. Seller reports the parts were tested and working and describes their cosmetic condition as excellent with no known issues. Screws are not included. The questionnaire does not identify which frame components are present or establish whether the set is complete; review the photos and confirm the exact pieces before purchase. Compatibility is identified by the seller as Ender-3 V2; other models have not been verified.",
+    "category_search": "3D Printer Parts",
+    "item_specifics": {
+      "Brand": "Creality",
+      "Model": "Ender-3 V2",
+      "Type": "Printer Frame"
+    },
+    "condition_suggestion": "Open box",
+    "condition_notes": "Open box. Excellent cosmetic condition. No known cosmetic issues reported by seller. Tested and working.",
+    "included_items": [
+      "Frame parts no screws"
+    ],
+    "missing_information": [
+      "Confirm exactly which frame pieces are included and whether the photographed set is complete; screws are excluded.",
+      "Category ID 183066 identifies 3D Printer Parts, but its category-specific leaf and official item-specific requirements still need live eBay Taxonomy validation.",
+      "Seller's tested-and-working statement is retained, though operational testing does not apply clearly to frame parts.",
+      "Official eBay category aspects not yet retrieved; validate locally with Taxonomy."
+    ],
+    "evidence_notes": [
+      {
+        "name": "Model",
+        "value": "Ender-3 V2",
+        "provenance": "verified",
+        "source_index": 0
+      },
+      {
+        "name": "Brand",
+        "value": "Creality",
+        "provenance": "verified",
+        "source_index": 0
+      },
+      {
+        "name": "Type",
+        "value": "Printer Frame",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire product: “Ender 3 V2 Frame”"
+      },
+      {
+        "name": "Condition",
+        "value": "Open box",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire condition: “Open box”"
+      },
+      {
+        "name": "Testing",
+        "value": "Tested and working",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire testing: “Tested and working”"
+      },
+      {
+        "name": "Included items",
+        "value": "Frame parts; no screws",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire included: “Frame parts no screws”"
+      },
+      {
+        "name": "Cosmetic condition",
+        "value": "Excellent",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire cosmetic: “Excellent”"
+      },
+      {
+        "name": "Wear/issues",
+        "value": "No known issues",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire wear: “No known issues”"
+      },
+      {
+        "name": "Compatibility",
+        "value": "For Ender-3 V2",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire details: “for ender 3 v2”"
+      },
+      {
+        "name": "eBay category",
+        "value": "3D Printer Parts (category ID 183066); leaf category not yet verified",
+        "provenance": "verified",
+        "source_index": 1
+      }
+    ],
+    "search_keywords": [
+      "Ender 3 V2 frame parts",
+      "Creality printer frame components"
+    ],
+    "research_notes": [
+      "Local photo folder only; photos not accessed by this plugin.",
+      "eBay item-specific transfer is not verified."
+    ]
+  },
+  "official_aspects": [],
+  "approved_at": "2026-11-15T10:22:47.403Z"
+}
