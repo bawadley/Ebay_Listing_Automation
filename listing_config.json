@@ -1,8 +1,8 @@
 {
   "image_source": "input",
-  "model": "qwen3-vl:4b",
+  "model": "qwen3:4b",
   "image_side": 1024,
-  "web_research": false,
+  "web_research": true,
   "draft_directory": "listing_drafts",
   "provider": "ollama",
   "ollama_url": "http://127.0.0.1:11434"

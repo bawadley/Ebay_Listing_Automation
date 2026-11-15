@@ -1,15 +1,17 @@
 {
   "listings": [
     {
-      "id": "example_spool_holder",
+      "id": "ender3v2_board",
       "images": [
-        "example_front.jpg",
-        "example_side.jpg"
+        "IMG_0242.jpeg"
       ],
       "details": {
-        "brand": "Only if confirmed",
-        "condition": "Describe accurately",
-        "included": "What is sold"
+        "product": "Ender 3 V2 motherboard",
+        "brand": "Creality",
+        "model": "Ender-3 V2",
+        "mpn": "ENTER VERIFIED BOARD NUMBER",
+        "condition": "Used (confirm)",
+        "included": "Only items confirmed by seller"
       }
     }
   ]
