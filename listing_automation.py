@@ -88,8 +88,8 @@ def picture_data(path, side):
 def parse_local_json(value):
     value = value.strip()
     if value.startswith("```"):
-        value = re.sub(r"^`{3}(?:json)?\\s*", "", value, count=1, flags=re.I)
-        value = re.sub(r"\\s*`{3}$", "", value, count=1)
+        value = re.sub(r"^`{3}(?:json)?\s*", "", value, count=1, flags=re.I)
+        value = re.sub(r"\s*`{3}$", "", value, count=1)
     data = json.loads(value)
     if not isinstance(data, dict):
         raise ValueError("AI must return a JSON object")
