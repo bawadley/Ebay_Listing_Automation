@@ -63,7 +63,7 @@ def process(state, auto_submit):
         print("No researched_listings folder yet.", flush=True)
         return
     for path in sorted(INPUT.glob("*.json")):
-        if path.stem == "example":
+        if path.stem == "example" or path.stem.endswith("_example"):
             continue
         try:
             item_id = safe_id(path.stem)
