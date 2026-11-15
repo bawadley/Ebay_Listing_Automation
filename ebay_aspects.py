@@ -110,9 +110,10 @@ def complete_aspects(record, details, metadata):
         # firmware, voltage, or connectors. Require seller-confirmed fitment.
         if key in ("compatible model", "compatible brand", "compatible product",
                    "compatible printer", "compatible equipment"):
-            verified = (provided.get(key) or
-                        provided.get("compatible_models") or
-                        provided.get("confirmed_compatibility") or "")
+            # Generic model/fitment notes are not brands or product types.
+            verified = provided.get(key) or ""
+            if key == "compatible model":
+                verified = verified or provided.get("compatible_models") or provided.get("confirmed_compatibility") or ""
             value = verified
             if not value:
                 record["missing_information"].append(

@@ -33,7 +33,9 @@ def audit_listing(item_id, write=True):
         key = name.casefold()
         raw = known.get(key, ("", ""))[1]
         if key in COMPATIBILITY:
-            raw = confirmed.get(key) or confirmed.get("confirmed_compatibility") or ""
+            raw = confirmed.get(key) or ""
+            if key == "compatible model":
+                raw = raw or confirmed.get("compatible_models") or confirmed.get("confirmed_compatibility") or ""
         value = str(raw).strip()
         if value.casefold() in UNKNOWN:
             value = ""

@@ -50,6 +50,24 @@ def upload_one(path, token):
     return url
 
 
+def cached_image_available(url):
+    """Reject stale EPS URLs; fail closed on temporary network/auth errors."""
+    if not isinstance(url, str) or not url.startswith("https://"):
+        return False
+    request = Request(url, headers={"Range": "bytes=0-0", "User-Agent": "eBayDraftPhotoCheck/1.0"})
+    try:
+        with urlopen(request, timeout=20) as response:
+            available = response.headers.get("Content-Type", "").lower().startswith("image/")
+            response.read(1)
+            return available
+    except HTTPError as exc:
+        if exc.code in (404, 410):
+            return False
+        raise RuntimeError("Cannot verify cached eBay image (HTTP " + str(exc.code) + "); retry later") from exc
+    except (URLError, TimeoutError, OSError) as exc:
+        raise RuntimeError("Cannot verify cached eBay image; check connection and retry") from exc
+
+
 def upload_images(paths, cache_path, token):
     if len(paths) > 12:
         raise ValueError("Only 12 pictures supported for draft feed")
@@ -66,7 +84,7 @@ def upload_images(paths, cache_path, token):
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         entry = cache.get(digest, {})
         url = entry.get("url")
-        if not url:
+        if not cached_image_available(url):
             url = upload_one(path, token)
             cache[digest] = {"file": path.name, "url": url}
             tmp = cache_path.with_suffix(".tmp")

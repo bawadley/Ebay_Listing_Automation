@@ -292,7 +292,7 @@ def export_ebay_seller_hub_drafts(records, directory):
     """
     columns = ["Action", "Custom label (SKU)", "Category ID", "Title",
                "Condition ID", "Item photo URL", "Description", "Format",
-               "Quantity", "UPC", "Start price", "Buy It Now price"]
+               "Quantity", "UPC", "Price"]
     path = directory / "ebay_seller_hub_drafts.csv"
     exported, skipped = 0, []
     with path.open("w", newline="", encoding="utf-8-sig") as file:
@@ -311,14 +311,14 @@ def export_ebay_seller_hub_drafts(records, directory):
                 "Title": str(rec.get("title", ""))[:80],
                 "Description": str(rec.get("description", "")),
                 # eBay condition IDs vary by category. Seller confirms on website.
-                "Condition ID": "",
+                "Condition ID": {"new": "NEW", "used": "USED"}.get(
+                    str(facts.get("condition") or "").strip().casefold(), ""),
                 # Local photos cannot be used as URLs; attach in Seller Hub.
                 "Item photo URL": "",
-                "Format": "",
+                "Format": "FixedPrice",
                 "Quantity": str(facts.get("quantity") or ""),
                 "UPC": "",
-                "Start price": "",
-                "Buy It Now price": "",
+                "Price": "",
             }
             writer.writerow(row)
             exported += 1
@@ -460,9 +460,12 @@ def main():
                 json.dumps(report, indent=2) + "\n", encoding="utf-8")
             print("eBay Feed task:", result["task_id"], "status:", result["status"],
                   "rows:", result["rows"], flush=True)
-            if result["status"] in ("COMPLETED_WITH_ERROR", "FAILED", "PARTIALLY_PROCESSED",
-                                    "UPLOADED_STATUS_UNKNOWN", "UNKNOWN"):
-                print("Check Seller Hub Reports upload results for details.", flush=True)
+            summary = result.get("upload_summary") or {}
+            if (result["status"] != "COMPLETED" or
+                    int(summary.get("failureCount") or 0) or
+                    int(summary.get("successCount") or 0) < result["rows"]):
+                print("Draft upload not confirmed. Check Seller Hub Reports before retrying.", flush=True)
+                return 1
         except Exception as exc:
             print("  eBay draft upload ERROR:", exc, file=sys.stderr)
             return 1
