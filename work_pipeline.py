@@ -99,21 +99,38 @@ def build_record(pack, fetch_category=False):
 
 
 def export_one(record, directory, photo_urls=None):
+    """Create a Draft-only Seller Hub CSV with supported specifics and EPS URLs."""
     exported = export_ebay_seller_hub_drafts([record], directory)
     if exported["exported"] != 1:
         raise ValueError("No Seller Hub draft row exported: " + str(exported["skipped"]))
     path = directory / "ebay_seller_hub_drafts.csv"
+    with path.open("r", encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.DictReader(f))
+        fields = list(rows[0])
     if photo_urls:
-        with path.open("r", encoding="utf-8-sig", newline="") as f:
-            rows = list(csv.DictReader(f))
-            fields = list(rows[0])
         rows[0]["Item photo URL"] = "|".join(photo_urls)
-        with path.open("w", encoding="utf-8-sig", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=fields)
-            writer.writeheader()
-            writer.writerows(rows)
+    # Seller Hub category templates use C: prefixes for item specifics.
+    # Never submit review placeholders as actual product attributes.
+    unknown = {"", "n/a", "not specified", "unknown", "not applicable", "none", "null"}
+    for name, value in record.get("item_specifics", {}).items():
+        if not isinstance(name, str) or not name.strip():
+            continue
+        value = str(value).strip()
+        if value.casefold() in unknown:
+            continue
+        status = record.get("item_specifics_status", {}).get(name, {})
+        if status.get("status") in ("MISSING", "INVALID_CHOICE"):
+            continue
+        column = "C:" + name.strip()
+        if column in fields:
+            continue
+        fields.append(column)
+        rows[0][column] = value
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
     return path
-
 
 def main():
     parser = argparse.ArgumentParser(description="ChatGPT Work research -> Mac photos -> eBay draft (never publish)")

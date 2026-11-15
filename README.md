@@ -282,3 +282,8 @@ The helper opens the official eBay authorization browser page. Log in to your eB
 **Work prompt:** 'Research my product [name/model/condition] for eBay. Find the exact leaf category ID and all published item specifics; verify technical details from manufacturers or reliable sources; use Not specified for unsupported values, and never assume compatibility. Write the complete structured package to researched_listings/<id>.json following the example schema. My photos are in product_photos/<id>/. Then tell me to preview it. Do not publish anything.'
 
 Official docs: https://developer.ebay.com/api-docs/commerce/media/static/overview.html , https://developer.ebay.com/api-docs/sell/static/feed/fx-feeds-overview.html , https://pages.ebay.com/sh/reports/help/create-listings-bulk/ .
+
+
+### Including item specifics in Seller Hub draft feeds
+
+The Work pipeline now adds supported nonblank item specifics using Seller Hub's dynamic `C:<aspect name>` columns (e.g. `C:Brand`, `C:Type`, `C:Model`), along with photo URLs. Unknown placeholders and values marked `INVALID_CHOICE` are omitted. This follows the Seller Hub category-template column convention, but **each category-specific aspect and permitted value needs verification**; eBay may reject unsupported names or choices in the upload results. Verify actual imported fields in the first live draft rather than assuming all attributes survived. See https://pages.ebay.com/sh/reports/help/create-listings-bulk/ for Seller Hub template guidance.
