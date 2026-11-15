@@ -1,0 +1,138 @@
+{
+  "id": "batch_86fb334f83a645dcadb9d6d2f9d40c28_2",
+  "photo_folder": "2",
+  "seller_details": {
+    "product": "Creality motherboard 4.2.2",
+    "condition": "New",
+    "included": "motherboard only",
+    "testing_status": "Tested and working",
+    "cosmetic_condition": "Excellent",
+    "cosmetic_wear": "No known issues",
+    "additional_details": "",
+    "quantity": 1
+  },
+  "questionnaire": {
+    "product": "Creality motherboard 4.2.2",
+    "condition": "New",
+    "testing": "Tested and working",
+    "included": "motherboard only",
+    "cosmetic": "Excellent",
+    "wear": "No known issues",
+    "details": "",
+    "photo_folder": "2"
+  },
+  "ebay_category_id": "183066",
+  "research_status": "Prepared in ChatGPT; approved research package. eBay draft creation not verified.",
+  "research_sources": [
+    {
+      "title": "Creality FAQ: Ender-3 V2 motherboard versions",
+      "url": "https://www.creality.com/resources/faq"
+    },
+    {
+      "title": "eBay 3D Printer Parts category",
+      "url": "https://www.ebay.com/b/3D-Printer-Parts/183066/bn_55161610"
+    },
+    {
+      "title": "eBay Motherboard 3D Printer Parts listings",
+      "url": "https://www.ebay.com/b/Motherboard-3D-Printer-Parts/183066/bn_73086381"
+    }
+  ],
+  "listing": {
+    "title": "Creality 4.2.2 3D Printer Motherboard Mainboard New Board Only",
+    "alternative_titles": [
+      "Creality 3D Printer Motherboard Version 4.2.2 New Mainboard",
+      "Creality 4.2.2 Mainboard 3D Printer Replacement Motherboard"
+    ],
+    "title_character_counts": [
+      62,
+      59,
+      59
+    ],
+    "title_selection_reason": "Names the seller-reported Creality 4.2.2 board, identifies it as a motherboard, and states board-only contents without claiming an exact printer fitment.",
+    "description": "Creality 4.2.2 3D printer motherboard. Motherboard only; no other parts are included. Seller describes it as new, cosmetically excellent, with no known issues, and reports that it was tested and working. Because “new” and “tested” can describe different histories, please confirm whether this is unused new stock or an open/installed board that was tested. The questionnaire does not identify the processor/chip version, board revision beyond 4.2.2, or verified compatible printer models; check the board markings and photos before purchase.",
+    "category_search": "3D Printer Parts",
+    "item_specifics": {
+      "Brand": "Creality",
+      "Type": "Motherboard",
+      "Model": "4.2.2"
+    },
+    "condition_suggestion": "New",
+    "condition_notes": "New. Excellent cosmetic condition. No known cosmetic issues reported by seller. Tested and working.",
+    "included_items": [
+      "motherboard only"
+    ],
+    "missing_information": [
+      "Confirm condition history: questionnaire says both New and Tested and working; clarify whether it is unused new stock or a previously installed/tested board.",
+      "Check photos/board label for exact board markings and chip version; do not infer a specific chip or firmware.",
+      "No compatible printer model is confirmed by seller. Creality's FAQ references 4.2.2 for some Ender-3 V2 configurations, but this does not establish this board's exact compatibility or full fitment list.",
+      "Category ID 183066 identifies 3D Printer Parts, but its category-specific leaf and official item-specific requirements still need live eBay Taxonomy validation.",
+      "Official eBay category aspects not yet retrieved; validate locally with Taxonomy."
+    ],
+    "evidence_notes": [
+      {
+        "name": "Brand",
+        "value": "Creality",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire product: “Creality motherboard 4.2.2”"
+      },
+      {
+        "name": "Type",
+        "value": "Motherboard",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire product: “Creality motherboard 4.2.2”"
+      },
+      {
+        "name": "Model",
+        "value": "4.2.2",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire product: “Creality motherboard 4.2.2”"
+      },
+      {
+        "name": "Condition",
+        "value": "New",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire condition: “New”"
+      },
+      {
+        "name": "Testing",
+        "value": "Tested and working",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire testing: “Tested and working”"
+      },
+      {
+        "name": "Included items",
+        "value": "Motherboard only",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire included: “motherboard only”"
+      },
+      {
+        "name": "Cosmetic condition",
+        "value": "Excellent",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire cosmetic: “Excellent”"
+      },
+      {
+        "name": "Wear/issues",
+        "value": "No known issues",
+        "provenance": "seller",
+        "seller_evidence": "Questionnaire wear: “No known issues”"
+      },
+      {
+        "name": "eBay category",
+        "value": "3D Printer Parts (category ID 183066); leaf category not yet verified",
+        "provenance": "verified",
+        "source_index": 1
+      }
+    ],
+    "search_keywords": [
+      "Creality 4.2.2 motherboard",
+      "3D printer mainboard replacement"
+    ],
+    "research_notes": [
+      "Local photo folder only; photos not accessed by this plugin.",
+      "eBay item-specific transfer is not verified."
+    ]
+  },
+  "official_aspects": [],
+  "approved_at": "2026-11-15T10:22:47.403Z"
+}
