@@ -173,7 +173,21 @@ def main():
             json.dumps(result, indent=2) + "\n", encoding="utf-8")
         print("Draft-only eBay Feed task:", result["task_id"],
               "status:", result["status"], flush=True)
-        print("Open Seller Hub Drafts: https://www.ebay.com/sh/lst/drafts")
+        summary = result.get("upload_summary") or {}
+        failed = int(summary.get("failureCount") or 0)
+        succeeded = int(summary.get("successCount") or 0)
+        if result["status"] != "COMPLETED" or failed or succeeded < 1:
+            print("EBAY DRAFT NOT CONFIRMED: processing status/row counts indicate failure or uncertainty.",
+                  file=sys.stderr)
+            print("Run: python ebay_feed_report.py " + result["task_id"] +
+                  " --id " + item_id, file=sys.stderr)
+            print("Do not retry this task blindly or assume a Seller Hub draft exists.",
+                  file=sys.stderr)
+            print("Fallback: Seller Hub > Reports > Uploads. Use its official Create new drafts template.",
+                  file=sys.stderr)
+            return 1
+        print("eBay reports processing success; verify actual draft in Seller Hub:")
+        print("https://www.ebay.com/sh/lst/drafts")
         print("Verify image display and full item specifics before publishing.")
         return 0
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
