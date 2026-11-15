@@ -350,14 +350,23 @@ def main():
                         "provide category_metadata or set EBAY_ACCESS_TOKEN before publishing")
                 print("  ChatGPT research:", len(references), "sources; no model API calls", flush=True)
             else:
-                references, research_status = research_product(details, config)
-                print("  Research:", research_status, "| sources:", len(references), flush=True)
                 category = get_category_aspects(details)
                 print("  eBay category:", category["status"], flush=True)
-                record = clean(generate(photos, details, config, key, references, category), name, photos)
+                if config.get("provider") == "openai":
+                    from openai_research import research_and_write
+                    print("  OpenAI web research and listing generation...", flush=True)
+                    result, references, usage = research_and_write(details, category, config, key)
+                    research_status = "OpenAI web research completed; review sources and specifics"
+                    record = clean(result, name, photos)
+                    record["openai_usage"] = usage
+                    print("  Research sources:", len(references), flush=True)
+                else:
+                    references, research_status = research_product(details, config)
+                    print("  Research:", research_status, "| sources:", len(references), flush=True)
+                    record = clean(generate(photos, details, config, key, references, category), name, photos)
+                    if not references:
+                        record["missing_information"].append("Not web-verified; confirm exact model and specifications")
                 record = complete_aspects(record, details, category)
-                if not references:
-                    record["missing_information"].append("Not web-verified; confirm exact model and specifications")
             record["seller_details"] = details
             record["research_sources"] = references
             record["research_status"] = research_status
