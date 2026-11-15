@@ -309,3 +309,7 @@ The listener checks GitHub every 60 seconds and automatically generates local pr
 **Example Work/ChatGPT request for four listings:** 'Batch 001: Listing 1 is ..., Listing 2 is ..., Listing 3 is ..., Listing 4 is ... . Research each, find exact eBay leaf category and its item specifics, verify specs, write strong title and description. Save four packages to the GitHub repo in `researched_listings/batch001_1.json` through `batch001_4.json`. Each package's `id` is `batch001_<number>` and `photo_folder` is the matching number `1` through `4`. Copy the exact JSON shape from `researched_listings/example.json` or `researched_listings/numbered_example.json`. Photos are on my computer; don't upload photos to GitHub. Do not publish anything.' 
 
 **Caution:** eBay Feed task acceptance isn't proof the Seller Hub draft was created; check Seller Hub Reports and Drafts. Automatic photo transfer and category aspect mapping must still be verified on one real account. No OpenAI API key is needed for this route. GitHub commit permissions are required for ChatGPT to save the files.
+
+## Diagnose eBay Feed errors without resubmitting
+
+If the FX_LISTING task reports `COMPLETED_WITH_ERROR`, inspect the eBay result file using `python ebay_feed_report.py <task-id> --id <listing-id>`. This makes GET requests only; it never uploads or creates a new listing. The decoded report is saved to `listing_drafts/work/<listing-id>/ebay_feed_result.txt`. Review the report and Seller Hub Drafts before any retry. Avoid sharing OAuth tokens or secret files.
