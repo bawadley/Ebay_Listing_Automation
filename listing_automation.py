@@ -85,7 +85,7 @@ def picture_data(path, side):
         return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 def generate(photos, details, config, api_key):
-    content = [{"type": "input_text", "text": "Create one eBay listing draft for these images. Seller-provided facts (if any): " + json.dumps(details)}]
+    content = [{"type": "input_text", "text": "Create one eBay listing draft for these images. Return a valid JSON object matching the required fields. Seller-provided facts (if any): " + json.dumps(details)}]
     for path in photos[:24]:
         content.extend([{"type": "input_text", "text": "Image: " + path.name},
                         {"type": "input_image", "image_url": picture_data(path, int(config["image_side"])), "detail": "high"}])
