@@ -76,18 +76,31 @@ def _save_state(path, state):
     tmp.replace(path)
 
 
+def read_draft_csv(path):
+    """Read both eBay's #INFO-prefixed Seller Hub template and legacy simple CSV."""
+    with path.open("r", encoding="utf-8-sig", newline="") as file:
+        all_rows = list(csv.reader(file))
+    header_at = next((n for n, row in enumerate(all_rows)
+                      if row and (row[0] == "Action" or row[0].startswith("Action("))), None)
+    if header_at is None:
+        raise ValueError("No eBay Seller Hub Action header found")
+    headers = all_rows[header_at]
+    action_key = headers[0]
+    if not {"Category ID", "Title", "Custom label (SKU)"}.issubset(headers):
+        raise ValueError("Missing required eBay Seller Hub draft headers")
+    rows = [dict(zip(headers, row + [""] * (len(headers) - len(row))))
+            for row in all_rows[header_at + 1:] if row and any(cell.strip() for cell in row)]
+    return rows, action_key
+
+
 def validate_csv(path):
     if not path.is_file():
         raise FileNotFoundError(str(path))
-    with path.open("r", encoding="utf-8-sig", newline="") as file:
-        reader = csv.DictReader(file)
-        if not reader.fieldnames or "Action" not in reader.fieldnames or "Category ID" not in reader.fieldnames:
-            raise ValueError("Expected eBay Seller Hub Create Drafts CSV headers")
-        rows = list(reader)
+    rows, action_key = read_draft_csv(path)
     if not rows:
         raise ValueError("Draft CSV has no eligible listings")
     for row in rows:
-        if str(row.get("Action", "")).strip() != "Draft":
+        if str(row.get(action_key, "")).strip() != "Draft":
             raise ValueError("Refusing to upload: every Action MUST equal Draft")
         if not str(row.get("Category ID", "")).strip().isdigit():
             raise ValueError("Refusing to upload: each row needs a numeric Category ID")
@@ -125,8 +138,7 @@ def status(task_id, token):
 def upload_drafts(csv_path, directory, poll_seconds=90):
     csv_path, directory = Path(csv_path), Path(directory)
     count = validate_csv(csv_path)
-    with csv_path.open("r", encoding="utf-8-sig", newline="") as file:
-        rows = list(csv.DictReader(file))
+    rows, _ = read_draft_csv(csv_path)
     skus = [str(row.get("Custom label (SKU)", "")).strip() for row in rows]
     if any(not sku for sku in skus) or len(skus) != len(set(skus)):
         raise ValueError("Every eBay draft must have a unique non-empty SKU/ID")

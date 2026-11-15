@@ -1,6 +1,7 @@
 """Official eBay Taxonomy API category-specific item specifics. No eBay publishing."""
 import json
 import os
+import base64
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
@@ -12,13 +13,37 @@ def _get(path, token, params):
     with urlopen(req, timeout=35) as response:
         return json.load(response)
 
+def _app_token():
+    token = os.environ.get("EBAY_ACCESS_TOKEN", "").strip()
+    if token:
+        return token
+    client = os.environ.get("EBAY_CLIENT_ID", "").strip()
+    secret = os.environ.get("EBAY_CLIENT_SECRET", "").strip()
+    if not client or not secret:
+        return ""
+    credentials = base64.b64encode((client + ":" + secret).encode()).decode()
+    request = Request(
+        "https://api.ebay.com/identity/v1/oauth2/token",
+        data=urlencode({"grant_type": "client_credentials",
+                        "scope": "https://api.ebay.com/oauth/api_scope"}).encode(),
+        method="POST",
+        headers={"Authorization": "Basic " + credentials,
+                 "Content-Type": "application/x-www-form-urlencoded"})
+    with urlopen(request, timeout=30) as response:
+        return json.load(response)["access_token"]
+
+
 def get_category_aspects(details):
     """Return all actual eBay category aspects, or a clear, non-fatal error."""
     info = {"category_id": str(details.get("ebay_category_id") or "").strip(),
             "category_name": None, "aspects": [], "status": ""}
-    token = os.environ.get("EBAY_ACCESS_TOKEN", "").strip()
+    try:
+        token = _app_token()
+    except (HTTPError, URLError, ValueError, KeyError, TimeoutError) as exc:
+        info["status"] = "eBay application OAuth unavailable: " + str(exc)[:250]
+        return info
     if not token:
-        info["status"] = "EBAY_ACCESS_TOKEN not set; cannot retrieve official category aspects"
+        info["status"] = "Set EBAY_ACCESS_TOKEN or EBAY_CLIENT_ID and EBAY_CLIENT_SECRET"
         return info
     try:
         tree_id = str(_get("get_default_category_tree_id", token,
@@ -52,7 +77,12 @@ def get_category_aspects(details):
                 "mode": c.get("aspectMode", "FREE_TEXT"),
                 "cardinality": c.get("itemToAspectCardinality", "SINGLE"),
                 "values": [str(v.get("localizedValue")) for v in a.get("aspectValues", [])
-                           if v.get("localizedValue")][:100]
+                           if v.get("localizedValue")],
+                "data_type": c.get("aspectDataType"),
+                "max_length": c.get("aspectMaxLength"),
+                "expected_required_by": c.get("expectedRequiredByDate"),
+                "applicable_to": c.get("aspectApplicableTo"),
+                "value_constraints": a.get("aspectValues", [])
             })
         info["status"] = "Loaded " + str(len(info["aspects"])) + " official eBay category fields"
     except (HTTPError, URLError, ValueError, KeyError, TimeoutError) as exc:

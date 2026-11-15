@@ -15,6 +15,7 @@ from pathlib import Path
 
 from listing_automation import ROOT
 from work_pipeline import package_data
+from ebay_category_audit import audit_listing
 
 ACTION_HEADER = "Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8)"
 HEADERS = [ACTION_HEADER, "Custom label (SKU)", "Category ID", "Title", "UPC",
@@ -61,7 +62,7 @@ def photo_url_diagnostics(urls):
     print("Note: local reachability does not prove that Seller Hub imports the photo.")
 
 
-def export_one(item_id, check_images=False, include_specifics=True):
+def export_one(item_id, check_images=False, include_specifics=True, official_aspects=False):
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,75}", item_id):
         raise ValueError("Invalid listing ID")
     source = ROOT / "researched_listings" / (item_id + ".json")
@@ -92,10 +93,17 @@ def export_one(item_id, check_images=False, include_specifics=True):
         "Description": str(listing.get("description") or ""),
         "Format": "FixedPrice",
     }
+    validated = None
+    if official_aspects:
+        validated = audit_listing(item_id)
+        print("Live category specifics:", len(validated["fields"]),
+              "| missing required:", len(validated["missing_required"]),
+              "| invalid:", len(validated["invalid"]))
     fields = list(HEADERS)
+    specifics_source = validated["accepted_item_specifics"] if validated else listing.get("item_specifics", {})
     if include_specifics:
         unknown = {"", "n/a", "not specified", "unknown", "not applicable", "none", "null"}
-        for name, value in listing.get("item_specifics", {}).items():
+        for name, value in specifics_source.items():
             if not isinstance(name, str) or not name.strip():
                 continue
             if not isinstance(value, (str, int, float)):
@@ -131,12 +139,15 @@ if __name__ == "__main__":
     parser.add_argument("id", help="Researched listing ID, e.g. batch001_1")
     parser.add_argument("--check-images", action="store_true",
                         help="Check if cached image URLs return accessible image data")
+    parser.add_argument("--official-aspects", action="store_true",
+                        help="Fetch all live eBay Taxonomy specifics, validate values, and save report")
     parser.add_argument("--basic", action="store_true",
                         help="Exact 11-column template, without experimental C: fields")
     args = parser.parse_args()
     try:
         export_one(args.id, check_images=args.check_images,
-                   include_specifics=not args.basic)
+                   include_specifics=not args.basic,
+                   official_aspects=args.official_aspects)
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
         print("ERROR:", exc, file=sys.stderr)
         sys.exit(1)
