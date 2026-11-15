@@ -180,3 +180,18 @@ Official eBay references:
 - https://www.ebay.com/help/selling/listings/writing-effective-title?id=4166
 - https://developer.ebay.com/api-docs/sell/static/inventory/publishing-offers.html
 - https://developer.ebay.com/api-docs/user-guides/static/trading-user-guide/item-specifics-requirements.html
+
+
+## Local Ollama AI (default)
+
+Install Ollama on Windows: https://ollama.com/download/windows . For Qwen3-VL use Ollama 0.12.7 or newer. In PowerShell:
+
+```powershell
+ollama pull qwen3-vl:4b
+git pull origin main
+.\.venv\Scripts\Activate.ps1
+python listing_automation.py --limit 2
+start .\listing_drafts\review.html
+```
+
+The default `listing_config.json` now selects `provider: "ollama"` and `model: "qwen3-vl:4b"`. The AI photo analysis runs on your own computer through `127.0.0.1:11434`, needs no OpenAI API key or credits, and writes editable local drafts only. If RAM is limited, try `ollama pull qwen3-vl:2b` and set that model in the config. Larger PCs can use `qwen3-vl:8b`. Running the model may be slow without a powerful GPU. It cannot verify live eBay prices or required item specifics without separate online research. Always verify product model, condition and fitment. No listings are published or uploaded to eBay. To use OpenAI again set `provider: "openai"` and `model: "gpt-4.1"` and set OPENAI_API_KEY.

@@ -1,7 +1,9 @@
 {
   "image_source": "input",
-  "model": "gpt-4.1",
-  "image_side": 1400,
+  "model": "qwen3-vl:4b",
+  "image_side": 1024,
   "web_research": false,
-  "draft_directory": "listing_drafts"
+  "draft_directory": "listing_drafts",
+  "provider": "ollama",
+  "ollama_url": "http://127.0.0.1:11434"
 }

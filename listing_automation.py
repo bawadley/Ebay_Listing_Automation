@@ -18,7 +18,8 @@ from PIL import Image, ImageOps
 
 ROOT = Path(__file__).resolve().parent
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"}
-DEFAULTS = {"image_source": "input", "model": "gpt-4.1",
+DEFAULTS = {"image_source": "input", "provider": "ollama", "model": "qwen3-vl:4b",
+            "ollama_url": "http://127.0.0.1:11434",
             "image_side": 1400, "web_research": False,
             "draft_directory": "listing_drafts"}
 
@@ -84,7 +85,53 @@ def picture_data(path, side):
         im.save(buf, "JPEG", quality=85)
         return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
+def parse_local_json(value):
+    value = value.strip()
+    if value.startswith("```"):
+        value = re.sub(r"^`{3}(?:json)?\\s*", "", value, count=1, flags=re.I)
+        value = re.sub(r"\\s*`{3}$", "", value, count=1)
+    data = json.loads(value)
+    if not isinstance(data, dict):
+        raise ValueError("AI must return a JSON object")
+    return data
+
+
+def generate_ollama(photos, details, config):
+    endpoint = config.get("ollama_url", "http://127.0.0.1:11434").rstrip("/")
+    if endpoint not in ("http://127.0.0.1:11434", "http://localhost:11434"):
+        raise ValueError("Ollama endpoint must be localhost:11434")
+    images = [picture_data(p, int(config["image_side"])).split(",", 1)[1] for p in photos[:12]]
+    message = ("Create one eBay listing draft. Return JSON only with every key in "
+               "the system instructions. Confirmed seller details: " + json.dumps(details))
+    payload = {"model": config["model"], "stream": False, "format": "json",
+               "options": {"temperature": 0.2, "num_predict": 2800},
+               "messages": [{"role": "system", "content": PROMPT},
+                            {"role": "user", "content": message, "images": images}]}
+    request = Request(endpoint + "/api/chat", data=json.dumps(payload).encode("utf-8"),
+                      headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urlopen(request, timeout=900) as response:
+            result = json.load(response)
+    except HTTPError as exc:
+        raise RuntimeError("Ollama HTTP " + str(exc.code) + ": " +
+                           exc.read().decode("utf-8", "replace")[:400]) from exc
+    except (URLError, TimeoutError) as exc:
+        raise RuntimeError("Could not connect to local Ollama. Start Ollama and run "
+                           "'ollama pull " + config["model"] + "'. " + str(exc)) from exc
+    content = result.get("message", {}).get("content", "")
+    if not content:
+        raise ValueError("Ollama returned empty output; check the model and system memory")
+    try:
+        return parse_local_json(content)
+    except ValueError as exc:
+        raise ValueError("Ollama did not return valid listing JSON: " + content[:250]) from exc
+
+
 def generate(photos, details, config, api_key):
+    if config.get("provider", "ollama") == "ollama":
+        return generate_ollama(photos, details, config)
+    if config.get("provider") != "openai":
+        raise ValueError("provider must be 'ollama' or 'openai'")
     content = [{"type": "input_text", "text": "Create one eBay listing draft for these images. Return a valid JSON object matching the required fields. Seller-provided facts (if any): " + json.dumps(details)}]
     for path in photos[:24]:
         content.extend([{"type": "input_text", "text": "Image: " + path.name},
@@ -194,8 +241,9 @@ def main():
     if not listings:
         parser.error("No product photos found")
     key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not key and any(args.force or not (drafts / (filename(name) + ".json")).exists() for name, _, _ in listings):
+    if config.get("provider", "ollama") == "openai" and not key and any(args.force or not (drafts / (filename(name) + ".json")).exists() for name, _, _ in listings):
         parser.error("Set OPENAI_API_KEY in PowerShell before generating")
+    print("AI provider:", config.get("provider", "ollama"), "model:", config["model"])
     failures = []
     new = 0
     for index, (name, photos, details) in enumerate(listings, 1):
