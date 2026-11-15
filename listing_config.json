@@ -1,0 +1,7 @@
+{
+  "image_source": "input",
+  "model": "gpt-4.1",
+  "image_side": 1400,
+  "web_research": false,
+  "draft_directory": "listing_drafts"
+}

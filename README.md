@@ -146,3 +146,37 @@ The crop routine checks that all detected bounding boxes have sufficient margin 
 ## Wood-background local AI crops (enabled)
 
 Wood/tabletop images now run the same local AI square crop-proposal path as white-background images (`allow_local_wood_crop: true`). The processor draws crop bounds and saves `*_crop_candidate.jpg` when the detected foreground fits with the configured margin. It does **not** automatically apply those crops: inspect each candidate against the original for missing rails, tools and hardware, then add safe files to `approved_local_crops`. Images whose segmentation touches the edge or exceeds the available square keep their original composition. Current preferred settings remain `subject_fill: 0.80` and `crop_margin: 0.05`.
+
+## Phase 2: AI-written eBay listing drafts (photo processor optional)
+
+The new \`listing_automation.py\` creates a **local batch of AI-written, human-reviewable drafts**. **It never connects to eBay, saves Seller Hub drafts, charges listing fees, or publishes listings.** Actual eBay-side draft syncing is a separate future step requiring eBay OAuth, eBay category/aspects, images hosted at HTTPS URLs or uploaded to eBay, selling policies, SKU, price and quantity. The \`drafts.csv\` is a review/export aid, **not** an eBay bulk-upload template.
+
+### Windows PowerShell quick start
+
+With your project folder open and a Python environment already configured:
+
+\`\`\`powershell
+git pull origin main
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+$env:OPENAI_API_KEY = "YOUR_OPENAI_API_KEY"
+python listing_automation.py --limit 2
+start .\listing_drafts\review.html
+\`\`\`
+
+The key belongs only in your local PowerShell session or a secure Windows secret store. Never check it into GitHub or put it in \`listing_config.json\`. API calls are billed separately from ChatGPT. Test with \`--limit 1\` or \`--limit 2\` first; after checking, run \`python listing_automation.py\` for the rest.
+
+**Photo grouping:** Photos directly inside \`input/\` become **one listing per image**. If you photograph several angles of one item, put them together in a subfolder such as \`input/printer_board_001/\`; that folder becomes one listing. Alternatively create \`listing_groups.json\` (see \`listing_groups.example.json\`) with \`listings\` entries containing a unique \`id\`, relative \`images\` list and optional seller-verified \`details\` object. The presence of \`listing_groups.json\` uses its grouping instead of auto grouping. If photos from different products get grouped together, the AI may write an inaccurate lot listing.
+
+**Outputs:** \`listing_drafts/review.html\` shows image thumbnails, SEO title, description, possible category, suggestions for condition/item specifics, and warnings. Each product also has editable JSON, plus \`drafts.csv\` and \`listing_report.json\`. Existing drafts are preserved on reruns unless you pass \`--force\` (overwrites prior edits). Photos are only read, not modified, and image processing does not run.
+
+**SEO and accuracy:** eBay recommends an informative title no longer than 80 characters, exact identifiers, suitable categories and required/recommended specifics; the generator prioritizes these and flags missing evidence. Item-specific names/required values depend on eBay's leaf category. The generator only suggests a category name, not a verified category ID, and it does **not** guarantee that all required eBay aspects are supplied. It never assumes electronics work from photos or makes up fitment/MPNs. Always review photos, brand, model, included components, condition, compatibility, price, shipping and returns before transferring a draft to eBay.
+
+Optional \`listing_config.json\` setting \`"web_research": true\` enables a Responses API web-search tool; this may add API cost or require a compatible model/tool combination. Leave it off for a lower-cost first test. Verified product details can instead be supplied in \`listing_groups.json\`.
+
+Official eBay references:
+- https://www.ebay.com/sellercenter/listings/create-listings
+- https://www.ebay.com/sellercenter/listings/item-specifics
+- https://www.ebay.com/help/selling/listings/writing-effective-title?id=4166
+- https://developer.ebay.com/api-docs/sell/static/inventory/publishing-offers.html
+- https://developer.ebay.com/api-docs/user-guides/static/trading-user-guide/item-specifics-requirements.html

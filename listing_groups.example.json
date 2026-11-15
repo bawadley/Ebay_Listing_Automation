@@ -1,0 +1,16 @@
+{
+  "listings": [
+    {
+      "id": "example_spool_holder",
+      "images": [
+        "example_front.jpg",
+        "example_side.jpg"
+      ],
+      "details": {
+        "brand": "Only if confirmed",
+        "condition": "Describe accurately",
+        "included": "What is sold"
+      }
+    }
+  ]
+}

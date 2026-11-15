@@ -1,0 +1,238 @@
+"""Generate AI-written, human-reviewable eBay listing drafts from product photos.
+No eBay connection and no publishing. Run: python listing_automation.py
+"""
+import argparse
+import base64
+import csv
+import html
+import io
+import json
+import os
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+from PIL import Image, ImageOps
+
+ROOT = Path(__file__).resolve().parent
+EXTS = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"}
+DEFAULTS = {"image_source": "input", "model": "gpt-4.1",
+            "image_side": 1400, "web_research": False,
+            "draft_directory": "listing_drafts"}
+
+def load(path, fallback):
+    if not path.exists():
+        return fallback
+    return json.loads(path.read_text(encoding="utf-8"))
+
+def gather(source):
+    """One listing per loose image, one multi-photo listing per immediate folder.
+    Optional listing_groups.json specifies exact image grouping and seller facts.
+    """
+    manifest = ROOT / "listing_groups.json"
+    if manifest.exists():
+        result = []
+        for group in load(manifest, {}).get("listings", []):
+            paths = []
+            for name in group.get("images", []):
+                photo = (source / name).resolve()
+                if not photo.is_relative_to(source.resolve()) or not photo.is_file() or photo.suffix.lower() not in EXTS:
+                    raise ValueError("Missing/invalid photo in listing_groups.json: " + name)
+                paths.append(photo)
+            if not paths:
+                raise ValueError("Each listing needs one or more valid images")
+            result.append((group.get("id", paths[0].stem), paths, group.get("details", {})))
+        return result
+    items = [(p.stem, [p], {}) for p in sorted(source.iterdir())
+             if p.is_file() and p.suffix.lower() in EXTS]
+    for folder in sorted(p for p in source.iterdir() if p.is_dir()):
+        photos = sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in EXTS)
+        if photos:
+            items.append((folder.name, photos, {}))
+    return items
+
+PROMPT = """Act as an expert eBay US resale listing writer. Analyze ALL photos as ONE product lot.
+Return a JSON object containing these exact keys:
+title (string, max 80 characters), alternative_titles (2 strings, max 80 each),
+description (clear short plain text with bullet lines and visible included parts),
+category_search (suggested category NAME, not a made-up category ID),
+item_specifics (object: supported eBay property name -> value),
+condition_suggestion (UNKNOWN, NEW, USED, OPEN_BOX, or FOR_PARTS),
+condition_notes (what is visibly supported, do not claim tested functionality),
+included_items (array of strings), missing_information (array),
+evidence_notes (array describing photo evidence for specifics),
+search_keywords (array), research_notes (array).
+SEO: brand, product name, exact model/MPN if verified, key specifications and fitment.
+Choose relevant buyer search terms and use 80 title characters where useful; no filler or spam.
+Never invent brand, model, MPN, UPC, OEM status, compatibility, quantity, condition,
+functionality, dimensions, warranty, or included extras. Never use details of a similar
+model as proof. If uncertain put it in missing_information, not item_specifics.
+Only use web research (if tool is available) as supporting evidence and do not treat
+similar-looking products as definite identifications. No fake item specifics.
+Mention actual visible wear or flaws; prompt seller to verify operation and condition.
+Do not claim pristine, new, tested, or genuine without seller proof.
+Keep description easy to scan, informative, accurate, free of unnecessary marketing.
+Avoid unsupported claims and comply with eBay best practices."""
+
+def picture_data(path, side):
+    with Image.open(path) as img:
+        im = ImageOps.exif_transpose(img).convert("RGB")
+        im.thumbnail((side, side), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=85)
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+def generate(photos, details, config, api_key):
+    content = [{"type": "input_text", "text": "Create one eBay listing draft for these images. Seller-provided facts (if any): " + json.dumps(details)}]
+    for path in photos[:24]:
+        content.extend([{"type": "input_text", "text": "Image: " + path.name},
+                        {"type": "input_image", "image_url": picture_data(path, int(config["image_side"])), "detail": "high"}])
+    request_body = {"model": config["model"], "instructions": PROMPT,
+                    "input": [{"role": "user", "content": content}],
+                    "text": {"format": {"type": "json_object"}},
+                    "max_output_tokens": 2700}
+    if config.get("web_research"):
+        request_body["tools"] = [{"type": "web_search_preview"}]
+    request = Request("https://api.openai.com/v1/responses",
+                      data=json.dumps(request_body).encode("utf-8"), method="POST",
+                      headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"})
+    try:
+        with urlopen(request, timeout=180) as response:
+            result = json.load(response)
+    except HTTPError as exc:
+        raise RuntimeError("OpenAI HTTP " + str(exc.code) + ": " + exc.read().decode("utf-8", "replace")[:500]) from exc
+    except (URLError, TimeoutError) as exc:
+        raise RuntimeError("OpenAI connection failed: " + str(exc)) from exc
+    chunks = [c.get("text", "") for out in result.get("output", [])
+              for c in out.get("content", []) if c.get("type") == "output_text"]
+    if not chunks:
+        raise ValueError("AI returned no JSON text")
+    raw = json.loads("".join(chunks))
+    if not isinstance(raw, dict):
+        raise ValueError("Unexpected response")
+    return raw
+
+def clean(raw, name, photos):
+    title = str(raw.get("title", "")).strip()
+    if not 0 < len(title) <= 80:
+        raise ValueError("AI title absent or exceeds eBay 80-character limit")
+    specifics = raw.get("item_specifics", {})
+    if not isinstance(specifics, dict):
+        specifics = {}
+    specifics = {str(k): str(v) for k, v in specifics.items() if v is not None and str(v).strip()}
+    # UPC/EAN/ISBN are especially high-risk hallucinations: require seller verification.
+    for identifier in ("UPC", "EAN", "ISBN"):
+        if identifier in specifics:
+            raw.setdefault("missing_information", []).append("Verify " + identifier + ": " + specifics.pop(identifier))
+    fields = ("included_items", "missing_information", "evidence_notes",
+              "search_keywords", "research_notes")
+    rec = {"id": name, "status": "REVIEW_REQUIRED", "title": title,
+           "title_characters": len(title),
+           "alternative_titles": [str(x).strip() for x in raw.get("alternative_titles", [])
+                                  if 0 < len(str(x).strip()) <= 80][:2],
+           "description": str(raw.get("description", "")),
+           "suggested_category": str(raw.get("category_search", "")),
+           "category_id": None, "item_specifics": specifics,
+           "condition_suggestion": str(raw.get("condition_suggestion", "UNKNOWN")),
+           "condition_notes": str(raw.get("condition_notes", "")),
+           "photos": [str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p) for p in photos],
+           "price": None, "shipping_policy": None, "return_policy": None,
+           "payment_policy": None, "needs_seller_approval": True,
+           "created_utc": datetime.now(timezone.utc).isoformat()}
+    rec.update({k: raw.get(k, []) if isinstance(raw.get(k, []), list) else [] for k in fields})
+    return rec
+
+def filename(value):
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", str(value))[:75] or "item"
+
+def review_page(records, directory):
+    e = lambda x: html.escape(str(x), quote=True)
+    page = ['<!doctype html><html><head><meta charset="utf-8"><title>eBay draft review</title>',
+            '<style>body{font:15px system-ui;margin:30px auto;padding:0 20px;max-width:1100px;background:#f6f6f6;color:#222}article{background:white;border:1px solid #ddd;border-radius:12px;padding:24px;margin:20px 0}h1{font-size:25px}h2{font-size:19px}.photos{display:flex;gap:10px;overflow:auto}.photos img{max-width:220px;max-height:180px;object-fit:contain;border:1px solid #ddd}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px;border-bottom:1px solid #ddd}pre{font:inherit;white-space:pre-wrap}.warn{color:#9b5100}</style></head><body>',
+            '<h1>AI eBay listing drafts</h1><p>All drafts require human review. No listings have been created on eBay.</p>']
+    for rec in records:
+        page += ['<article><h2>' + e(rec["title"]) + '</h2>',
+                 '<p>REVIEW REQUIRED · ' + str(rec["title_characters"]) + '/80 characters</p>',
+                 '<div class="photos">']
+        for item in rec["photos"]:
+            # Output is always HTML-escaped; local paths relative to the draft folder.
+            absolute = ROOT / item
+            if absolute.exists():
+                rel = os.path.relpath(absolute, directory).replace("\\", "/")
+                page.append('<img src="' + e(rel) + '" alt="Product image">')
+        page += ['</div><h3>Description</h3><pre>' + e(rec["description"]) + '</pre>',
+                 '<h3>Item specifics (verify before submission)</h3><table>']
+        for key, value in rec["item_specifics"].items():
+            page.append('<tr><th>' + e(key) + '</th><td>' + e(value) + '</td></tr>')
+        page += ['</table><p><b>Category suggestion:</b> ' + e(rec["suggested_category"]) + '</p>',
+                 '<p><b>Condition suggestion:</b> ' + e(rec["condition_suggestion"]) + ' — ' + e(rec["condition_notes"]) + '</p>',
+                 '<h3 class="warn">Missing details / needs verification</h3><ul>']
+        for issue in rec["missing_information"]:
+            page.append('<li>' + e(issue) + '</li>')
+        page += ['</ul><h3>Alternative titles</h3><ul>']
+        for alt in rec["alternative_titles"]:
+            page.append('<li>' + e(alt) + '</li>')
+        page += ['</ul></article>']
+    page.append('</body></html>')
+    (directory / "review.html").write_text("\n".join(page), encoding="utf-8")
+
+def main():
+    parser = argparse.ArgumentParser(description="Prepare local AI eBay drafts; NEVER publishes")
+    parser.add_argument("--limit", type=int, default=0, help="Test only the first N products")
+    parser.add_argument("--force", action="store_true", help="Regenerate (overwrite) existing AI drafts")
+    parser.add_argument("--source", help="Override input image directory")
+    args = parser.parse_args()
+    config = {**DEFAULTS, **load(ROOT / "listing_config.json", {})}
+    source = Path(args.source).resolve() if args.source else (ROOT / config["image_source"]).resolve()
+    if not source.is_dir():
+        parser.error("Missing photo directory: " + str(source))
+    drafts = (ROOT / config["draft_directory"]).resolve()
+    drafts.mkdir(parents=True, exist_ok=True)
+    listings = gather(source)[:args.limit or None]
+    if not listings:
+        parser.error("No product photos found")
+    key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not key and any(args.force or not (drafts / (filename(name) + ".json")).exists() for name, _, _ in listings):
+        parser.error("Set OPENAI_API_KEY in PowerShell before generating")
+    failures = []
+    new = 0
+    for index, (name, photos, details) in enumerate(listings, 1):
+        path = drafts / (filename(name) + ".json")
+        print(f"[{index}/{len(listings)}] {name}: {len(photos)} photo(s)", flush=True)
+        if path.exists() and not args.force:
+            print("  Existing draft preserved. Use --force to regenerate.")
+            continue
+        try:
+            record = clean(generate(photos, details, config, key), name, photos)
+            path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            new += 1
+        except Exception as exc:
+            print("  ERROR:", exc, file=sys.stderr)
+            failures.append({"item": name, "error": str(exc)})
+    records = []
+    for name, _, _ in listings:
+        path = drafts / (filename(name) + ".json")
+        if path.exists():
+            records.append(load(path, {}))
+    review_page(records, drafts)
+    with (drafts / "drafts.csv").open("w", newline="", encoding="utf-8-sig") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=["id", "title", "description", "suggested_category",
+                            "condition_suggestion", "item_specifics_json", "photo_paths", "missing_information"])
+        writer.writeheader()
+        for rec in records:
+            writer.writerow({"id": rec["id"], "title": rec["title"], "description": rec["description"],
+                "suggested_category": rec["suggested_category"], "condition_suggestion": rec["condition_suggestion"],
+                "item_specifics_json": json.dumps(rec["item_specifics"], ensure_ascii=False),
+                "photo_paths": " | ".join(rec["photos"]),
+                "missing_information": " | ".join(map(str, rec["missing_information"]))})
+    report = {"total": len(listings), "new": new, "review_ready": len(records),
+              "errors": failures, "submitted_to_ebay": 0}
+    (drafts / "listing_report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    print(f"Finished: {len(records)} local drafts, {len(failures)} errors; 0 sent to eBay.")
+    print("Open:", drafts / "review.html")
+    return 1 if failures else 0
+
+if __name__ == "__main__":
+    sys.exit(main())
