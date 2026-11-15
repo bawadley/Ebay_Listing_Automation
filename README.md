@@ -252,3 +252,17 @@ This researches products with OpenAI, generates local previews, and uploads the 
 Implementation intentionally requires an explicit `--upload-drafts` flag rather than automatically creating drafts during local testing. You can eventually make it default after a successful live pilot. To update or change a listing already uploaded, edit its draft in Seller Hub. Since the Feed API creates partial Seller Hub drafts, photo and potentially item-specific metadata completion remains a manual step.
 
 Official sources: https://developer.ebay.com/api-docs/sell/static/feed/fx-feeds-overview.html and https://pages.ebay.com/sh/reports/help/create-listings-bulk/ .
+
+
+### One-time eBay browser authorization (recommended)
+
+In your Windows PowerShell session, set these **Production** eBay developer values locally (never commit them):
+
+```powershell
+$env:EBAY_CLIENT_ID = "YOUR_PRODUCTION_APP_ID"
+$env:EBAY_CLIENT_SECRET = "YOUR_PRODUCTION_CERT_ID"
+$env:EBAY_RUNAME = "YOUR_PRODUCTION_OAUTH_RUNAME"
+python ebay_oauth_setup.py
+```
+
+The helper opens the official eBay authorization browser page. Log in to your eBay **seller** account, grant the requested `sell.inventory` scope, then paste the COMPLETE redirected URL into PowerShell. The helper validates the OAuth state and saves your refresh token only to the local, git-ignored `.ebay_oauth.json`. It does not submit any drafts. The uploader will use that saved refresh token and the Client ID/Secret environment variables to refresh access before uploads. The initial seller authorization must be done once manually; eBay requires user consent. Do not upload or disclose the refresh token file. On Windows, protect your local project directory and user account, since chmod cannot guarantee Windows filesystem permissions. The `EBAY_ACCESS_TOKEN` Taxonomy key remains separate from the seller authorization.

@@ -6,3 +6,6 @@ input/*
 output/*
 !output/.gitkeep
 .DS_Store
+
+# Local eBay seller authorization (secret)
+.ebay_oauth.json

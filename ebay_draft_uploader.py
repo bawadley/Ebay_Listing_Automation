@@ -24,6 +24,13 @@ OPEN = {"CREATED", "QUEUED", "IN_PROCESS"}
 def seller_token():
     """User-authorized OAuth access token, optionally refreshed from long-lived token."""
     refresh = os.environ.get("EBAY_REFRESH_TOKEN", "").strip()
+    if not refresh:
+        stored = Path(__file__).resolve().parent / ".ebay_oauth.json"
+        if stored.is_file():
+            try:
+                refresh = str(json.loads(stored.read_text(encoding="utf-8")).get("refresh_token") or "")
+            except (OSError, ValueError):
+                pass
     client = os.environ.get("EBAY_CLIENT_ID", "").strip()
     secret = os.environ.get("EBAY_CLIENT_SECRET", "").strip()
     if refresh and client and secret:
