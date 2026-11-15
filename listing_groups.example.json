@@ -10,7 +10,8 @@
         "brand": "Creality",
         "model": "Ender-3 V2",
         "condition": "Used",
-        "included": "Motherboard only (if confirmed)"
+        "included": "Motherboard only (if confirmed)",
+        "ebay_category_id": ""
       }
     }
   ]

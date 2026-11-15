@@ -1,3 +1,4 @@
+from ebay_aspects import get_category_aspects, complete_aspects
 """Generate AI-written, human-reviewable eBay listing drafts from seller product facts.
 No eBay connection and no publishing. Run: python listing_automation.py
 """
@@ -127,14 +128,18 @@ def research_product(details, config):
     return clean, "Web research results provided as references; verify model match"
 
 
-def generate_ollama(photos, details, config, research):
+def generate_ollama(photos, details, config, research, metadata):
     endpoint = config.get("ollama_url", "http://127.0.0.1:11434").rstrip("/")
     if endpoint not in ("http://127.0.0.1:11434", "http://localhost:11434"):
         raise ValueError("Ollama endpoint must be localhost:11434")
     message = ("Create one eBay listing draft. Return JSON only with every key in the system "
                "instructions. Seller-confirmed product facts: " + json.dumps(details) +
                "\nSearch results for research (untrusted; cross-check exact model, never "
-               "invent specifics): " + json.dumps(research))
+               "invent specifics): " + json.dumps(research) +
+               "\nOfficial eBay category aspect fields and permitted values: " +
+               json.dumps(metadata.get("aspects", [])) +
+               "\nPopulate every applicable aspect only if supported by seller facts or matching research; "
+               "otherwise use Not specified.")
     payload = {"model": config["model"], "stream": False, "format": "json",
                "options": {"temperature": 0.2, "num_predict": 2200},
                "messages": [{"role": "system", "content": PROMPT},
@@ -159,12 +164,13 @@ def generate_ollama(photos, details, config, research):
         raise ValueError("Ollama did not return valid listing JSON: " + content[:250]) from exc
 
 
-def generate(photos, details, config, api_key, research):
+def generate(photos, details, config, api_key, research, metadata):
     if config.get("provider", "ollama") == "ollama":
-        return generate_ollama(photos, details, config, research)
+        return generate_ollama(photos, details, config, research, metadata)
     if config.get("provider") != "openai":
         raise ValueError("provider must be 'ollama' or 'openai'")
-    content = [{"type": "input_text", "text": "Generate a valid JSON eBay listing using ONLY seller-provided identity and matching research. Seller facts: " + json.dumps(details) + " Research references: " + json.dumps(research)}]
+    content = [{"type": "input_text", "text": "Generate a valid JSON eBay listing using ONLY seller-provided identity and matching research. Seller facts: " + json.dumps(details) + " Research references: " + json.dumps(research) +
+               " Official eBay category aspects: " + json.dumps(metadata.get("aspects", []))}]
     payload = {"model": config["model"], "instructions": PROMPT,
                "input": [{"role": "user", "content": content}],
                "text": {"format": {"type": "json_object"}},
@@ -234,7 +240,10 @@ def review_page(records, directory):
         page += ['</div><h3>Description</h3><pre>' + e(rec["description"]) + '</pre>',
                  '<h3>Item specifics (verify before submission)</h3><table>']
         for key, value in rec["item_specifics"].items():
-            page.append('<tr><th>' + e(key) + '</th><td>' + e(value) + '</td></tr>')
+            meta = rec.get("item_specifics_status", {}).get(key, {})
+            note = " (" + str(meta.get("usage", "UNVERIFIED")) + "; " + str(meta.get("status", "REVIEW")) + ")"
+            page.append('<tr><th>' + e(key) + '</th><td>' + e(value) + e(note) + '</td></tr>')
+        page.append('<tr><th>eBay category lookup</th><td>' + e(rec.get("category_lookup_status", "")) + '</td></tr>')
         page += ['</table><p><b>Category suggestion:</b> ' + e(rec["suggested_category"]) + '</p>',
                  '<p><b>Condition suggestion:</b> ' + e(rec["condition_suggestion"]) + ' — ' + e(rec["condition_notes"]) + '</p>',
                  '<h3 class="warn">Missing details / needs verification</h3><ul>']
@@ -285,7 +294,10 @@ def main():
         try:
             references, research_status = research_product(details, config)
             print("  Research:", research_status, "| sources:", len(references), flush=True)
-            record = clean(generate(photos, details, config, key, references), name, photos)
+            category = get_category_aspects(details)
+            print("  eBay category:", category["status"], flush=True)
+            record = clean(generate(photos, details, config, key, references, category), name, photos)
+            record = complete_aspects(record, details, category)
             record["seller_details"] = details
             record["research_sources"] = references
             record["research_status"] = research_status
